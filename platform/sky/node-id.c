@@ -69,3 +69,10 @@ node_id_burn(unsigned short id)
   xmem_pwrite(buf, 4, NODE_ID_XMEM_OFFSET);
 }
 /*---------------------------------------------------------------------------*/
+#ifdef NANOSEC_DATA
+void
+node_id_burn_nanosec_data(unsigned short node_id, char *master_key, char *seed)
+{
+  
+}
+#endif /* NANOSEC */

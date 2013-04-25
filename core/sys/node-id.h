@@ -37,6 +37,9 @@
 
 void node_id_restore(void);
 void node_id_burn(unsigned short node_id);
+#ifdef NANOSEC_DATA
+void node_id_burn_nanosec_data(unsigned short node_id, char *master_key, char *seed);
+#endif /* NANOSEC */
 
 extern unsigned short node_id;
 
