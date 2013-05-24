@@ -1603,7 +1603,7 @@ input(void)
   uncomp_hdr_len = 0;
   packetbuf_hdr_len = 0;
 
-  /* The MAC puts the 15.4 payload inside the packetbuf data buffer */
+  /* NETSTACK_LLSEC puts the 15.4 payload inside the packetbuf data buffer */
   packetbuf_ptr = packetbuf_dataptr();
 
   /* Save the RSSI of the incoming packet in case the upper layer will

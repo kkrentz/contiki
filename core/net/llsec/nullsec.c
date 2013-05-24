@@ -44,6 +44,7 @@
 
 #include "net/llsec/nullsec.h"
 #include "net/netstack.h"
+#include "net/packetbuf.h"
 
 /*---------------------------------------------------------------------------*/
 static void
@@ -67,7 +68,9 @@ on_frame_created(void)
 static void
 input(void)
 {
-  NETSTACK_NETWORK.input();
+  if(packetbuf_hdrreduce(packetbuf_attr(PACKETBUF_ATTR_HDR_LEN))) {
+    NETSTACK_NETWORK.input();
+  }
 }
 /*---------------------------------------------------------------------------*/
 const struct llsec_driver nullsec_driver = {
