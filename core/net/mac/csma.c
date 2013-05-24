@@ -395,7 +395,7 @@ send_packet(mac_callback_t sent, void *ptr)
 static void
 input_packet(void)
 {
-  NETSTACK_NETWORK.input();
+  NETSTACK_LLSEC.input();
 }
 /*---------------------------------------------------------------------------*/
 static int

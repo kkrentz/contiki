@@ -27,4 +27,5 @@ CONTIKI_CPU=$(CONTIKI)/cpu/cc2538
 include $(CONTIKI_CPU)/Makefile.cc2538
 
 MODULES += core/net core/net/ipv6 core/net/mac core/net/ip \
-           core/net/rpl core/net/rime core/net/mac/contikimac
+           core/net/rpl core/net/rime core/net/mac/contikimac \
+           core/net/llsec
