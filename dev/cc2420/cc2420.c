@@ -99,13 +99,6 @@ int cc2420_packets_seen, cc2420_packets_read;
 
 static uint8_t volatile pending;
 
-#define BUSYWAIT_UNTIL(cond, max_time)                                  \
-  do {                                                                  \
-    rtimer_clock_t t0;                                                  \
-    t0 = RTIMER_NOW();                                                  \
-    while(!(cond) && RTIMER_CLOCK_LT(RTIMER_NOW(), t0 + (max_time)));   \
-  } while(0)
-
 volatile uint8_t cc2420_sfd_counter;
 volatile uint16_t cc2420_sfd_start_time;
 volatile uint16_t cc2420_sfd_end_time;
@@ -154,25 +147,36 @@ static uint8_t receive_on;
 static int channel;
 
 /*---------------------------------------------------------------------------*/
-
-static void
-getrxdata(void *buf, int len)
+static uint16_t
+getreg(enum cc2420_register regname)
 {
-  CC2420_READ_FIFO_BUF(buf, len);
+  uint16_t reg;
+  CC2420_READ_REG(regname, reg);
+  return reg;
 }
+/*---------------------------------------------------------------------------*/
 static void
-getrxbyte(uint8_t *byte)
+setreg(enum cc2420_register regname, uint16_t value)
 {
-  CC2420_READ_FIFO_BYTE(*byte);
+  CC2420_WRITE_REG(regname, value);
 }
+/*---------------------------------------------------------------------------*/
 static void
-flushrx(void)
+read_ram(uint8_t *buffer, uint16_t adr, uint16_t count)
 {
-  uint8_t dummy;
-
-  CC2420_READ_FIFO_BYTE(dummy);
-  CC2420_STROBE(CC2420_SFLUSHRX);
-  CC2420_STROBE(CC2420_SFLUSHRX);
+  CC2420_READ_RAM(buffer, adr, count);
+}
+/*---------------------------------------------------------------------------*/
+static void
+write_ram(uint8_t *buffer, uint16_t adr, uint16_t count)
+{
+  CC2420_WRITE_RAM(buffer, adr, count);
+}
+/*---------------------------------------------------------------------------*/
+static void
+write_fifo_buf(const uint8_t *buffer, uint16_t count)
+{
+  CC2420_WRITE_FIFO_BUF(buffer, count);
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -181,12 +185,52 @@ strobe(enum cc2420_register regname)
   CC2420_STROBE(regname);
 }
 /*---------------------------------------------------------------------------*/
-static unsigned int
-status(void)
+static uint8_t
+get_status(void)
 {
   uint8_t status;
   CC2420_GET_STATUS(status);
   return status;
+}
+/*---------------------------------------------------------------------------*/
+static void
+getrxdata(void *buf, int len)
+{
+  CC2420_READ_FIFO_BUF(buf, len);
+}
+/*---------------------------------------------------------------------------*/
+static void
+getrxbyte(uint8_t *byte)
+{
+  CC2420_READ_FIFO_BYTE(byte);
+}
+/*---------------------------------------------------------------------------*/
+static void
+flushrx(void)
+{
+  uint8_t dummy;
+
+  getrxbyte(&dummy);
+  strobe(CC2420_SFLUSHRX);
+  strobe(CC2420_SFLUSHRX);
+}
+/*---------------------------------------------------------------------------*/
+static void
+busy_wait_until_set(uint8_t status_bit, rtimer_clock_t max_time)
+{
+  rtimer_clock_t t0;
+  t0 = RTIMER_NOW();
+  while(!(get_status() & status_bit)
+      && RTIMER_CLOCK_LT(RTIMER_NOW(), t0 + (max_time)));
+}
+/*---------------------------------------------------------------------------*/
+static void
+busy_wait_for_transmission()
+{
+  rtimer_clock_t t0;
+  t0 = RTIMER_NOW();
+  while((get_status() & BV(CC2420_TX_ACTIVE))
+      && RTIMER_CLOCK_LT(RTIMER_NOW(), t0 + (RTIMER_SECOND / 10)));
 }
 /*---------------------------------------------------------------------------*/
 static uint8_t locked, lock_on, lock_off;
@@ -197,7 +241,7 @@ on(void)
   CC2420_ENABLE_FIFOP_INT();
   strobe(CC2420_SRXON);
 
-  BUSYWAIT_UNTIL(status() & (BV(CC2420_XOSC16M_STABLE)), RTIMER_SECOND / 100);
+  busy_wait_until_set(BV(CC2420_XOSC16M_STABLE), RTIMER_SECOND / 100);
 
   ENERGEST_ON(ENERGEST_TYPE_LISTEN);
   receive_on = 1;
@@ -209,7 +253,7 @@ off(void)
   receive_on = 0;
 
   /* Wait for transmission to end before turning radio off. */
-  BUSYWAIT_UNTIL(!(status() & BV(CC2420_TX_ACTIVE)), RTIMER_SECOND / 10);
+  busy_wait_for_transmission();
 
   ENERGEST_OFF(ENERGEST_TYPE_LISTEN);
   strobe(CC2420_SRFOFF);
@@ -233,20 +277,6 @@ static void RELEASE_LOCK(void) {
     }
   }
   locked--;
-}
-/*---------------------------------------------------------------------------*/
-static unsigned
-getreg(enum cc2420_register regname)
-{
-  unsigned reg;
-  CC2420_READ_REG(regname, reg);
-  return reg;
-}
-/*---------------------------------------------------------------------------*/
-static void
-setreg(enum cc2420_register regname, unsigned value)
-{
-  CC2420_WRITE_REG(regname, value);
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -369,7 +399,7 @@ cc2420_transmit(unsigned short payload_len)
 
 #if WITH_SEND_CCA
   strobe(CC2420_SRXON);
-  BUSYWAIT_UNTIL(status() & BV(CC2420_RSSI_VALID), RTIMER_SECOND / 10);
+  busy_wait_until_set(BV(CC2420_RSSI_VALID), RTIMER_SECOND / 10);
   strobe(CC2420_STXONCCA);
 #else /* WITH_SEND_CCA */
   strobe(CC2420_STXON);
@@ -382,11 +412,11 @@ cc2420_transmit(unsigned short payload_len)
         if(packetbuf_attr(PACKETBUF_ATTR_PACKET_TYPE) ==
            PACKETBUF_ATTR_PACKET_TYPE_TIMESTAMP) {
           /* Write timestamp to last two bytes of packet in TXFIFO. */
-          CC2420_WRITE_RAM(&sfd_timestamp, CC2420RAM_TXFIFO + payload_len - 1, 2);
+          write_ram((uint8_t *) &sfd_timestamp, CC2420RAM_TXFIFO + payload_len - 1, 2);
         }
       }
 
-      if(!(status() & BV(CC2420_TX_ACTIVE))) {
+      if(!(get_status() & BV(CC2420_TX_ACTIVE))) {
         /* SFD went high but we are not transmitting. This means that
            we just started receiving a packet, so we drop the
            transmission. */
@@ -399,7 +429,7 @@ cc2420_transmit(unsigned short payload_len)
       ENERGEST_ON(ENERGEST_TYPE_TRANSMIT);
       /* We wait until transmission has ended so that we get an
 	 accurate measurement of the transmission time.*/
-      BUSYWAIT_UNTIL(!(status() & BV(CC2420_TX_ACTIVE)), RTIMER_SECOND / 10);
+      busy_wait_for_transmission();
 
 #ifdef ENERGEST_CONF_LEVELDEVICE_LEVELS
       ENERGEST_OFF_LEVEL(ENERGEST_TYPE_TRANSMIT,cc2420_get_txpower());
@@ -455,8 +485,8 @@ cc2420_prepare(const void *payload, unsigned short payload_len)
   strobe(CC2420_SFLUSHTX);
 
   total_len = payload_len + CHECKSUM_LEN;
-  CC2420_WRITE_FIFO_BUF(&total_len, 1);
-  CC2420_WRITE_FIFO_BUF(payload, payload_len);
+  write_fifo_buf(&total_len, 1);
+  write_fifo_buf(payload, payload_len);
   
   RELEASE_LOCK();
   return 0;
@@ -490,7 +520,7 @@ cc2420_off(void)
      we don't actually switch the radio off now, but signal that the
      driver should switch off the radio once the packet has been
      received and processed, by setting the 'lock_off' variable. */
-  if(status() & BV(CC2420_TX_ACTIVE)) {
+  if(get_status() & BV(CC2420_TX_ACTIVE)) {
     lock_off = 1;
   } else {
     off();
@@ -538,10 +568,10 @@ cc2420_set_channel(int c)
   /*
    * Writing RAM requires crystal oscillator to be stable.
    */
-  BUSYWAIT_UNTIL((status() & (BV(CC2420_XOSC16M_STABLE))), RTIMER_SECOND / 10);
+  busy_wait_until_set(BV(CC2420_XOSC16M_STABLE), RTIMER_SECOND / 10);
 
   /* Wait for any transmission to end. */
-  BUSYWAIT_UNTIL(!(status() & BV(CC2420_TX_ACTIVE)), RTIMER_SECOND / 10);
+  busy_wait_for_transmission();
 
   setreg(CC2420_FSCTRL, f);
 
@@ -568,22 +598,22 @@ cc2420_set_pan_addr(unsigned pan,
   /*
    * Writing RAM requires crystal oscillator to be stable.
    */
-  BUSYWAIT_UNTIL(status() & (BV(CC2420_XOSC16M_STABLE)), RTIMER_SECOND / 10);
+  busy_wait_until_set(BV(CC2420_XOSC16M_STABLE), RTIMER_SECOND / 10);
 
   tmp[0] = pan & 0xff;
   tmp[1] = pan >> 8;
-  CC2420_WRITE_RAM(&tmp, CC2420RAM_PANID, 2);
+  write_ram((uint8_t *) &tmp, CC2420RAM_PANID, 2);
 
   tmp[0] = addr & 0xff;
   tmp[1] = addr >> 8;
-  CC2420_WRITE_RAM(&tmp, CC2420RAM_SHORTADDR, 2);
+  write_ram((uint8_t *) &tmp, CC2420RAM_SHORTADDR, 2);
   if(ieee_addr != NULL) {
     uint8_t tmp_addr[8];
     /* LSB first, MSB last for 802.15.4 addresses in CC2420 */
     for (f = 0; f < 8; f++) {
       tmp_addr[7 - f] = ieee_addr[f];
     }
-    CC2420_WRITE_RAM(tmp_addr, CC2420RAM_IEEEADDR, 8);
+    write_ram(tmp_addr, CC2420RAM_IEEEADDR, 8);
   }
   RELEASE_LOCK();
 }
@@ -741,7 +771,7 @@ cc2420_rssi(void)
     radio_was_off = 1;
     cc2420_on();
   }
-  BUSYWAIT_UNTIL(status() & BV(CC2420_RSSI_VALID), RTIMER_SECOND / 100);
+  busy_wait_until_set(BV(CC2420_RSSI_VALID), RTIMER_SECOND / 100);
 
   rssi = (int)((signed char)getreg(CC2420_RSSI));
 
@@ -768,7 +798,7 @@ cc2420_cca_valid(void)
     return 1;
   }
   GET_LOCK();
-  valid = !!(status() & BV(CC2420_RSSI_VALID));
+  valid = !!(get_status() & BV(CC2420_RSSI_VALID));
   RELEASE_LOCK();
   return valid;
 }
@@ -802,7 +832,7 @@ cc2420_cca(void)
     return 1;
   }
 
-  BUSYWAIT_UNTIL(status() & BV(CC2420_RSSI_VALID), RTIMER_SECOND / 100);
+  busy_wait_until_set(BV(CC2420_RSSI_VALID), RTIMER_SECOND / 100);
 
   cca = CC2420_CCA_IS_1;
 
