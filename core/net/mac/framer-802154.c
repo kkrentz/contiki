@@ -125,6 +125,10 @@ create(void)
   if(packetbuf_attr(PACKETBUF_ATTR_MAC_SEQNO)) {
     params.seq = packetbuf_attr(PACKETBUF_ATTR_MAC_SEQNO);
   } else {
+    /* Ensure that the sequence number 0 is not used as it would bypass the above check. */
+    if(mac_dsn == 0) {
+      mac_dsn++;
+    }
     params.seq = mac_dsn++;
     packetbuf_set_attr(PACKETBUF_ATTR_MAC_SEQNO, params.seq);
   }
