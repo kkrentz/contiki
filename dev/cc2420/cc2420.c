@@ -97,8 +97,6 @@ int cc2420_authority_level_of_sender;
 
 int cc2420_packets_seen, cc2420_packets_read;
 
-static uint8_t volatile pending;
-
 volatile uint8_t cc2420_sfd_counter;
 volatile uint16_t cc2420_sfd_start_time;
 volatile uint16_t cc2420_sfd_end_time;
@@ -610,7 +608,6 @@ cc2420_interrupt(void)
   process_poll(&cc2420_process);
 
   last_packet_timestamp = cc2420_sfd_start_time;
-  pending++;
   cc2420_packets_seen++;
   return 1;
 }
@@ -648,11 +645,6 @@ cc2420_read(void *buf, unsigned short bufsize)
   if(!CC2420_FIFOP_IS_1) {
     return 0;
   }
-  /*  if(!pending) {
-    return 0;
-    }*/
-  
-  pending = 0;
   
   GET_LOCK();
 
