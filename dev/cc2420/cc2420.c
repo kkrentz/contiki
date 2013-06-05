@@ -95,8 +95,6 @@ rtimer_clock_t cc2420_time_of_arrival, cc2420_time_of_departure;
 
 int cc2420_authority_level_of_sender;
 
-int cc2420_packets_seen, cc2420_packets_read;
-
 volatile uint8_t cc2420_sfd_counter;
 volatile uint16_t cc2420_sfd_start_time;
 volatile uint16_t cc2420_sfd_end_time;
@@ -608,7 +606,6 @@ cc2420_interrupt(void)
   process_poll(&cc2420_process);
 
   last_packet_timestamp = cc2420_sfd_start_time;
-  cc2420_packets_seen++;
   return 1;
 }
 /*---------------------------------------------------------------------------*/
@@ -647,8 +644,6 @@ cc2420_read(void *buf, unsigned short bufsize)
   }
   
   GET_LOCK();
-
-  cc2420_packets_read++;
 
   getrxbyte(&len);
 
