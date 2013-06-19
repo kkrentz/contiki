@@ -181,7 +181,7 @@ create(void)
   params.payload_len = packetbuf_datalen();
   hdr_len = frame802154_hdrlen(&params);
   if(packetbuf_hdralloc(hdr_len)) {
-    frame802154_create(&params, packetbuf_hdrptr(), hdr_len);
+    frame802154_create(&params, packetbuf_hdrptr());
 
     PRINTF("15.4-OUT: %2X", params.fcf.frame_type);
     PRINTADDR(params.dest_addr);
