@@ -54,6 +54,7 @@
 #define LLSEC802154_H_
 
 #include "net/mac/frame802154.h"
+#include "contiki.h"
 
 #ifdef LLSEC802154_CONF_SECURITY_LEVEL
 #define LLSEC802154_SECURITY_LEVEL LLSEC802154_CONF_SECURITY_LEVEL
@@ -106,6 +107,30 @@ enum {
   PACKETBUF_ATTR_KEY_SOURCE_BYTES_0_1
 };
 #endif /* LLSEC802154_USES_EXPLICIT_KEYS */
+
+#ifdef LLSEC802154_CONF_AES
+#define LLSEC802154_AES LLSEC802154_CONF_AES
+#else /* LLSEC802154_CONF_AES */
+#define LLSEC802154_AES null_llsec802154_aes_driver
+#endif /* LLSEC802154_CONF_AES */
+
+/**
+ * Structure of AES drivers.
+ */
+struct llsec802154_aes_driver {
+  
+  /**
+   * \brief Sets the current 128-bit key.
+   */
+  void (* set_key)(uint8_t *key);
+  
+  /**
+   * \brief AES-128 block cipher
+   */
+  void (* aes)(uint8_t *plaintext_and_result);
+};
+
+extern const struct llsec802154_aes_driver LLSEC802154_AES;
 
 #endif /* LLSEC802154_H_ */
 
