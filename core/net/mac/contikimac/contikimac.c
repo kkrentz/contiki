@@ -605,6 +605,7 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
     return MAC_TX_ERR_FATAL;
   }
   hdrlen += sizeof(struct hdr);
+  packetbuf_set_attr(PACKETBUF_ATTR_HDR_LEN, hdrlen);
 #else
   /* Create the MAC header for the data packet. */
   hdrlen = NETSTACK_FRAMER.create();
@@ -614,6 +615,9 @@ send_packet(mac_callback_t mac_callback, void *mac_callback_ptr,
     return MAC_TX_ERR_FATAL;
   }
 #endif
+  if(!NETSTACK_LLSEC.on_frame_created()) {
+    return MAC_TX_ERR_FATAL;
+  }
 
   /* Make sure that the packet is longer or equal to the shortest
      packet length. */

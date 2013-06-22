@@ -34,6 +34,7 @@
  * \author
  *         Niclas Finne <nfi@sics.se>
  *         Joakim Eriksson <joakime@sics.se>
+ *         Konrad Krentz <konrad.krentz@gmail.com>
  */
 
 #include "net/mac/framer-802154.h"
@@ -186,7 +187,9 @@ create(void)
     PRINTF("15.4-OUT: %2X", params.fcf.frame_type);
     PRINTADDR(params.dest_addr);
     PRINTF("%d %u (%u)\n", hdr_len, packetbuf_datalen(), packetbuf_totlen());
-
+    
+    packetbuf_set_attr(PACKETBUF_ATTR_HDR_LEN, hdr_len);
+    
     return hdr_len;
   } else {
     PRINTF("15.4-OUT: too large header: %u\n", hdr_len);
