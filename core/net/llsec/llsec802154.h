@@ -130,6 +130,20 @@ struct llsec802154_aes_driver {
   void (* aes)(uint8_t *plaintext_and_result);
 };
 
+/**
+ * \brief                Generates a MIC over the frame in the packetbuf.
+ * \param result         The generated MIC will be put here
+ * \param custom_mic_len <= 16; set to LLSEC802154_MIC_LENGTH to be compliant
+ */
+void llsec802154_mic(const uint8_t *extended_source_address,
+    uint8_t *result,
+    uint8_t custom_mic_len);
+
+/**
+ * \brief XORs the frame in the packetbuf with the key stream.
+ */
+void llsec802154_ctr(const uint8_t *extended_source_address);
+
 extern const struct llsec802154_aes_driver LLSEC802154_AES;
 
 #endif /* LLSEC802154_H_ */

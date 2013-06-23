@@ -43,10 +43,131 @@
  */
 
 #include "net/llsec/llsec802154.h"
+#include "net/packetbuf.h"
+#include <string.h>
 
+#define BLOCK_SIZE 16
+
+/*---------------------------------------------------------------------------*/
+static void
+set_nonce(uint8_t *nonce,
+    uint8_t flags,
+    const uint8_t *extended_source_address,
+    uint8_t counter)
+{
+  /* 1 byte||          8 bytes        ||    4 bytes    || 1 byte  || 2 bytes */
+  /* flags || extended_source_address || frame_counter || sec_lvl || counter */
+  
+  nonce[0] = flags;
+  memcpy(nonce + 1, extended_source_address, 8);
+  nonce[9] = packetbuf_attr(PACKETBUF_ATTR_FRAME_COUNTER_BYTES_2_3) >> 8;
+  nonce[10] = packetbuf_attr(PACKETBUF_ATTR_FRAME_COUNTER_BYTES_2_3) & 0xff;
+  nonce[11] = packetbuf_attr(PACKETBUF_ATTR_FRAME_COUNTER_BYTES_0_1) >> 8;
+  nonce[12] = packetbuf_attr(PACKETBUF_ATTR_FRAME_COUNTER_BYTES_0_1) & 0xff;
+  nonce[13] = LLSEC802154_SECURITY_LEVEL;
+  nonce[14] = 0;
+  nonce[15] = counter;
+}
+/*---------------------------------------------------------------------------*/
+/* XORs the block m[pos] ... m[pos + 15] with K_{counter} */
+static void
+ctr_step(const uint8_t *extended_source_address,
+    uint8_t pos,
+    uint8_t *m_and_result,
+    uint8_t m_len,
+    uint8_t counter)
+{
+  uint8_t a[BLOCK_SIZE];
+  uint8_t i;
+  
+  set_nonce(a, LLSEC802154_ENCRYPTION_FLAGS, extended_source_address, counter);
+  LLSEC802154_AES.aes(a);
+  
+  for(i = 0; (pos + i < m_len) && (i < BLOCK_SIZE); i++) {
+    m_and_result[pos + i] ^= a[i];
+  }
+}
+/*---------------------------------------------------------------------------*/
+void
+llsec802154_mic(const uint8_t *extended_source_address,
+    uint8_t *result,
+    uint8_t custom_mic_len)
+{
+  uint8_t x[BLOCK_SIZE];
+  uint8_t pos;
+  uint8_t i;
+  uint8_t a_len;
+  uint8_t *a = packetbuf_hdrptr();
+#if LLSEC802154_USES_ENCRYPTION
+  uint8_t m_len;
+  uint8_t *m;
+  
+  a_len = packetbuf_attr(PACKETBUF_ATTR_HDR_LEN);
+  m_len = packetbuf_totlen() - a_len;
+  m = a + a_len;
+  set_nonce(x, LLSEC802154_AUTH_FLAGS, extended_source_address, m_len);
+#else /* LLSEC802154_USES_ENCRYPTION */
+  a_len = packetbuf_totlen();
+  set_nonce(x, LLSEC802154_AUTH_FLAGS, extended_source_address, 0);
+#endif /* LLSEC802154_USES_ENCRYPTION */
+  LLSEC802154_AES.aes(x);
+  
+  x[1] = x[1] ^ a_len;
+  for(i = 2; (i - 2 < a_len) && (i < BLOCK_SIZE); i++) {
+    x[i] ^= a[i - 2];
+  }
+  
+  LLSEC802154_AES.aes(x);
+  
+  pos = 14;
+  while(pos < a_len) {
+    for(i = 0; (pos + i < a_len) && (i < BLOCK_SIZE); i++) {
+      x[i] ^= a[pos + i];
+    }
+    pos += BLOCK_SIZE;
+    LLSEC802154_AES.aes(x);
+  }
+  
+#if LLSEC802154_USES_ENCRYPTION
+  pos = 0;
+  while(pos < m_len) {
+    for(i = 0; (pos + i < m_len) && (i < BLOCK_SIZE); i++) {
+      x[i] ^= m[pos + i];
+    }
+    pos += BLOCK_SIZE;
+    LLSEC802154_AES.aes(x);
+  }
+#endif /* LLSEC802154_USES_ENCRYPTION */
+  
+  ctr_step(extended_source_address, 0, x, BLOCK_SIZE, 0);
+  memcpy(result, x, custom_mic_len);
+}
+/*---------------------------------------------------------------------------*/
+void
+llsec802154_ctr(const uint8_t *extended_source_address)
+{
+  uint8_t hdr_len;
+  uint8_t m_len;
+  uint8_t *m;
+  uint8_t pos;
+  uint8_t counter;
+  
+  hdr_len = packetbuf_attr(PACKETBUF_ATTR_HDR_LEN);
+  m_len = packetbuf_totlen() - hdr_len;
+  m = ((uint8_t *) packetbuf_hdrptr()) + hdr_len;
+  
+  pos = 0;
+  counter = 1;
+  while(pos < m_len) {
+    ctr_step(extended_source_address, pos, m, m_len, counter++);
+    pos += BLOCK_SIZE;
+  }
+}
+/*---------------------------------------------------------------------------*/
 const struct llsec802154_aes_driver null_llsec802154_aes_driver = {
   NULL,
   NULL
 };
+/*---------------------------------------------------------------------------*/
 
 /** @} */
