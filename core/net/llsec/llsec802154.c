@@ -164,6 +164,27 @@ llsec802154_ctr(const uint8_t *extended_source_address)
   }
 }
 /*---------------------------------------------------------------------------*/
+void
+llsec802154_padded_aes(uint8_t *plaintext_and_result, uint8_t plaintext_len)
+{
+  uint8_t block[BLOCK_SIZE];
+  
+  memset(block, 0, BLOCK_SIZE);
+  memcpy(block, plaintext_and_result, plaintext_len);
+  LLSEC802154_AES.aes(block);
+  memcpy(plaintext_and_result, block, plaintext_len);
+}
+/*---------------------------------------------------------------------------*/
+void
+llsec802154_set_padded_key(uint8_t *key, uint8_t key_len)
+{
+  uint8_t block[BLOCK_SIZE];
+  
+  memset(block, 0, BLOCK_SIZE);
+  memcpy(block, key, key_len);
+  LLSEC802154_AES.set_key(block);
+}
+/*---------------------------------------------------------------------------*/
 const struct llsec802154_aes_driver null_llsec802154_aes_driver = {
   NULL,
   NULL

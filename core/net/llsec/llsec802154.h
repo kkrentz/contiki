@@ -144,6 +144,16 @@ void llsec802154_mic(const uint8_t *extended_source_address,
  */
 void llsec802154_ctr(const uint8_t *extended_source_address);
 
+/**
+ * \brief Pads the plaintext with zeroes before calling LLSEC802154_CCM.aes
+ */
+void llsec802154_padded_aes(uint8_t *plaintext_and_result, uint8_t plaintext_len);
+
+/**
+ * \brief Pads the key with zeroes before calling LLSEC802154_CCM.set_key
+ */
+void llsec802154_set_padded_key(uint8_t *key, uint8_t key_len);
+
 extern const struct llsec802154_aes_driver LLSEC802154_AES;
 
 #endif /* LLSEC802154_H_ */
