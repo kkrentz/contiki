@@ -111,7 +111,7 @@ enum {
 #ifdef LLSEC802154_CONF_AES
 #define LLSEC802154_AES LLSEC802154_CONF_AES
 #else /* LLSEC802154_CONF_AES */
-#define LLSEC802154_AES null_llsec802154_aes_driver
+#define LLSEC802154_AES ti_aes_driver
 #endif /* LLSEC802154_CONF_AES */
 
 /**

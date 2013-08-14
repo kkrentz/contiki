@@ -185,10 +185,5 @@ llsec802154_set_padded_key(uint8_t *key, uint8_t key_len)
   LLSEC802154_AES.set_key(block);
 }
 /*---------------------------------------------------------------------------*/
-const struct llsec802154_aes_driver null_llsec802154_aes_driver = {
-  NULL,
-  NULL
-};
-/*---------------------------------------------------------------------------*/
 
 /** @} */
