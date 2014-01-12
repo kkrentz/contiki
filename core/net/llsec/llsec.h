@@ -58,6 +58,13 @@
 #define LLSEC_H_
 
 #include "net/mac/mac.h"
+#include "net/llsec/llsec802154.h"
+
+#ifdef LLSEC_CONF_REPLAY_PROTECTION
+#define LLSEC_REPLAY_PROTECTION LLSEC_CONF_REPLAY_PROTECTION
+#else /* LLSEC_CONF_REPLAY_PROTECTION */
+#define LLSEC_REPLAY_PROTECTION LLSEC802154_SECURITY_LEVEL
+#endif /* LLSEC_CONF_REPLAY_PROTECTION */
 
 typedef void (* llsec_on_bootstrapped_t)(void);
 

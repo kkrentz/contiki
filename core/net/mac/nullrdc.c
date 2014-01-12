@@ -44,6 +44,7 @@
 #include "net/queuebuf.h"
 #include "net/netstack.h"
 #include "net/rime/rimestats.h"
+#include "net/llsec/llsec.h"
 #include <string.h>
 
 #if CONTIKI_TARGET_COOJA
@@ -298,6 +299,8 @@ packet_input(void)
     int duplicate = 0;
 
 #if NULLRDC_802154_AUTOACK || NULLRDC_802154_AUTOACK_HW
+/* Disable duplicate detection if the LLSEC driver provides replay protection anyway. */
+#if !LLSEC_REPLAY_PROTECTION
     /* Check for duplicate packet. */
     duplicate = mac_sequence_is_duplicate();
     if(duplicate) {
@@ -307,8 +310,10 @@ packet_input(void)
     } else {
       mac_sequence_register_seqno();
     }
+#endif /* LLSEC_REPLAY_PROTECTION */
 #endif /* NULLRDC_802154_AUTOACK */
 
+/* TODO We may want to acknowledge only authentic frames */ 
 #if NULLRDC_SEND_802154_ACK
     {
       frame802154_t info154;

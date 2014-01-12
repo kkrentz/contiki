@@ -51,6 +51,7 @@
 #include "sys/compower.h"
 #include "sys/pt.h"
 #include "sys/rtimer.h"
+#include "net/llsec/llsec.h"
 
 
 #include <string.h>
@@ -972,6 +973,8 @@ input_packet(void)
         ctimer_stop(&ct);
       }
 
+/* Disable duplicate detection if the LLSEC driver provides replay protection anyway. */
+#if !LLSEC_REPLAY_PROTECTION
       /* Check for duplicate packet. */
       if(mac_sequence_is_duplicate()) {
         /* Drop the packet. */
@@ -979,6 +982,7 @@ input_packet(void)
         return;
       }
       mac_sequence_register_seqno();
+#endif /* LLSEC_REPLAY_PROTECTION */
 
 #if CONTIKIMAC_CONF_COMPOWER
       /* Accumulate the power consumption for the packet reception. */
