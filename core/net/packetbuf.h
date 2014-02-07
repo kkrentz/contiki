@@ -54,6 +54,7 @@
 
 #include "contiki-conf.h"
 #include "net/linkaddr.h"
+#include "net/llsec/llsec802154.h"
 
 /**
  * \brief      The size of the packetbuf, in bytes
@@ -358,9 +359,11 @@ enum {
   PACKETBUF_ATTR_NUM_REXMIT,
   PACKETBUF_ATTR_PENDING,
   PACKETBUF_ATTR_FRAME_TYPE,
+#if LLSEC802154_SECURITY_LEVEL
   PACKETBUF_ATTR_SECURITY_LEVEL,
   PACKETBUF_ATTR_FRAME_COUNTER_BYTES_0_1,
   PACKETBUF_ATTR_FRAME_COUNTER_BYTES_2_3,
+#endif /* LLSEC802154_SECURITY_LEVEL */
   
   /* Scope 2 attributes: used between end-to-end nodes. */
   PACKETBUF_ATTR_HOPS,
