@@ -66,6 +66,7 @@
 #include "net/rime/rime.h"
 #include "net/ipv6/sicslowpan.h"
 #include "net/netstack.h"
+#include "net/llsec/llsec802154.h"
 
 #if UIP_CONF_IPV6
 
@@ -155,11 +156,11 @@ void uip_log(char *msg);
 /** @} */
 
 
-/** \brief Size of the 802.15.4 payload (127byte - 25 for MAC header) */
+/** \brief Maximum available size for frame headers and upper-layer payload */
 #ifdef SICSLOWPAN_CONF_MAC_MAX_PAYLOAD
 #define MAC_MAX_PAYLOAD SICSLOWPAN_CONF_MAC_MAX_PAYLOAD
 #else /* SICSLOWPAN_CONF_MAC_MAX_PAYLOAD */
-#define MAC_MAX_PAYLOAD 102
+#define MAC_MAX_PAYLOAD 127 - 2 /* FCS */ - LLSEC802154_MIC_LENGTH - LLSEC802154_AUX_SECURITY_HEADER_LENGTH
 #endif /* SICSLOWPAN_CONF_MAC_MAX_PAYLOAD */
 
 

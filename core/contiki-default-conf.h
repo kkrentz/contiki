@@ -214,14 +214,15 @@
 #define SICSLOWPAN_CONF_FRAG 1
 #endif /* SICSLOWPAN_CONF_FRAG */
 
-/* SICSLOWPAN_CONF_MAC_MAX_PAYLOAD specifies the maximum size of
-   packets before they get fragmented. The default is 127 bytes (the
-   maximum size of a 802.15.4 frame) - 25 bytes (for the 802.15.4 MAC
-   layer header). This can be increased for systems with larger packet
-   sizes. */
-#ifndef SICSLOWPAN_CONF_MAC_MAX_PAYLOAD
-#define SICSLOWPAN_CONF_MAC_MAX_PAYLOAD (127 - 25)
-#endif /* SICSLOWPAN_CONF_MAC_MAX_PAYLOAD */
+/* SICSLOWPAN_CONF_MAC_MAX_PAYLOAD is the maximum available size for
+   frame headers and upper-layer payload (excluding FCS and security-related
+   overhead). By default, SICSLOWPAN_CONF_MAC_MAX_PAYLOAD is
+   127 bytes (MTU of 802.15.4) - 2 bytes (FCS). When enabling
+   802.15.4 security, this value shrinks further due to the security-related
+   overhead. If SICSLOWPAN_CONF_MAC_MAX_PAYLOAD is unset,
+   the proper value will be derived from the LLSEC802154_SECURITY_LEVEL.
+   Systems with larger packet sizes can supersede this behavior,
+   by #defining SICSLOWPAN_CONF_MAC_MAX_PAYLOAD. */
 
 /* SICSLOWPAN_CONF_COMPRESSION_THRESHOLD sets a lower threshold for
    when packets should not be compressed. This is used by ContikiMAC,
