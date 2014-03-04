@@ -49,7 +49,7 @@
 #include "net/packetbuf.h"
 #include <string.h>
 
-#if NONCORESEC_CONF_KEY
+#ifdef NONCORESEC_CONF_KEY
 #define NONCORESEC_KEY NONCORESEC_CONF_KEY
 #else /* NONCORESEC_CONF_KEY */
 #define NONCORESEC_KEY { 0x00 , 0x01 , 0x02 , 0x03 , \
