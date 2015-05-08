@@ -140,7 +140,11 @@ set_rime_addr(void)
 
   memset(&addr, 0, sizeof(linkaddr_t));
 #if NETSTACK_CONF_WITH_IPV6
+#if LINKADDR_SIZE == 2
+  addr.u16 = node_id;
+#else /* LINKADDR_SIZE == 2 */
   memcpy(addr.u8, ds2411_id, sizeof(addr.u8));
+#endif /* LINKADDR_SIZE == 2 */
 #else
   if(node_id == 0) {
     for(i = 0; i < sizeof(linkaddr_t); ++i) {
