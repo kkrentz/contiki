@@ -47,6 +47,7 @@
 
 #include "net/mac/frame802154.h"
 #include "net/llsec/llsec802154.h"
+#include "net/mac/contikimac/ilos.h"
 
 #ifdef ANTI_REPLAY_CONF_WITH_SUPPRESSION
 #define ANTI_REPLAY_WITH_SUPPRESSION ANTI_REPLAY_CONF_WITH_SUPPRESSION
@@ -55,13 +56,16 @@
 #endif /* ANTI_REPLAY_CONF_WITH_SUPPRESSION */
 
 struct anti_replay_info {
+#if ANTI_REPLAY_WITH_SUPPRESSION
   frame802154_frame_counter_t his_broadcast_counter;
   frame802154_frame_counter_t his_unicast_counter;
-#if ANTI_REPLAY_WITH_SUPPRESSION
   frame802154_frame_counter_t my_unicast_counter;
+#else /* ANTI_REPLAY_WITH_SUPPRESSION */
+  frame802154_frame_counter_t his_counter;
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
 };
 
+#if LLSEC802154_USES_FRAME_COUNTER
 #if ANTI_REPLAY_WITH_SUPPRESSION
 extern uint32_t anti_replay_my_broadcast_counter;
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
@@ -114,6 +118,11 @@ void anti_replay_init_info(struct anti_replay_info *sender_info);
  * \retval 0           <-> received frame was not replayed
  */
 int anti_replay_was_replayed(struct anti_replay_info *sender_info);
+#endif /* LLSEC802154_USES_FRAME_COUNTER */
+
+#if ILOS_ENABLED
+int anti_replay_was_replayed(struct secrdc_phase *phase);
+#endif /* ILOS_ENABLED */
 
 #endif /* ANTI_REPLAY_H */
 

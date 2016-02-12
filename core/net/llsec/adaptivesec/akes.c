@@ -100,7 +100,11 @@
 
 #define MAX_HELLOACK_DELAY ((AKES_MAX_WAITING_PERIOD * CLOCK_SECOND) \
     - (MAX_RETRANSMISSION_BACK_OFF * CLOCK_SECOND))
+#if SECRDC_ENABLED
+#define MIN_HELLOACK_DELAY (0)
+#else /* SECRDC_ENABLED */
 #define MIN_HELLOACK_DELAY (CLOCK_SECOND / NETSTACK_RDC_CHANNEL_CHECK_RATE)
+#endif /* SECRDC_ENABLED */
 
 #define DEBUG 0
 #if DEBUG
@@ -114,11 +118,16 @@ static void on_hello_sent(void *ptr, int status, int transmissions);
 static void on_hello_done(void *ptr);
 static void send_helloack(void *ptr);
 static void send_ack(struct akes_nbr_entry *entry, int is_new);
+#if !ILOS_ENABLED
 static void send_updateack(struct akes_nbr_entry *entry);
+#endif /* !ILOS_ENABLED */
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+static void on_helloack_sent(void *ptr, int status, int transmissions);
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
 static void on_ack_sent(void *ptr, int status, int transmissions);
 
 /* A random challenge, which will be attached to HELLO commands */
-static uint8_t hello_challenge[AKES_NBR_CHALLENGE_LEN];
+uint8_t akes_hello_challenge[AKES_NBR_CHALLENGE_LEN];
 static int is_awaiting_helloacks;
 static struct ctimer hello_timer;
 static struct cmd_broker_subscription subscription;
@@ -136,13 +145,28 @@ prepare_update_command(uint8_t cmd_id,
   uint8_t payload_len;
 
   payload = adaptivesec_prepare_command(cmd_id, akes_nbr_get_addr(entry));
+#if ILOS_ENABLED
+  if(cmd_id == AKES_UPDATE_IDENTIFIER) {
+    potr_set_seqno(entry->refs[status]);
+  }
+#elif POTR_ENABLED
+  switch(cmd_id) {
+  case AKES_UPDATE_IDENTIFIER:
+  case AKES_UPDATEACK_IDENTIFIER:
+    potr_set_seqno(entry->refs[status]);
+    break;
+  }
+#else /* POTR_ENABLED */
   adaptivesec_add_security_header(entry->refs[status]);
   anti_replay_suppress_counter();
+#endif /* POTR_ENABLED */
+#if !SECRDC_ENABLED
   if(status) {
     /* avoids that csma.c confuses frames for tentative and permanent neighbors */
     packetbuf_set_attr(PACKETBUF_ATTR_MAC_SEQNO,
         0xff00 + packetbuf_attr(PACKETBUF_ATTR_MAC_SEQNO));
   }
+#endif /* !SECRDC_ENABLED */
 #if ANTI_REPLAY_WITH_SUPPRESSION
   packetbuf_set_attr(PACKETBUF_ATTR_NEIGHBOR_INDEX, akes_nbr_index_of(entry->refs[status]));
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
@@ -160,10 +184,31 @@ prepare_update_command(uint8_t cmd_id,
 
   /* write payload */
   if(status) {
+#if ILOS_ENABLED
+    payload += ILOS_WAKE_UP_COUNTER_LEN;
+#endif /* ILOS_ENABLED */
+    payload += SECRDC_Q_LEN;
     akes_nbr_copy_challenge(payload, entry->tentative->challenge);
     payload += AKES_NBR_CHALLENGE_LEN;
   }
 
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+  if(cmd_id == AKES_ACK_IDENTIFIER) {
+#if ILOS_ENABLED
+    payload += ILOS_WAKE_UP_COUNTER_LEN;
+#endif /* ILOS_ENABLED */
+    memcpy(payload, entry->tentative->meta->q, SECRDC_Q_LEN);
+    payload += SECRDC_Q_LEN;
+    payload[0] = entry->tentative->meta->strobe_index;
+    payload++;
+#if ILOS_ENABLED
+    wake_up_counter_write(payload, secrdc_get_wake_up_counter(secrdc_get_last_wake_up_time()));
+    payload += ILOS_WAKE_UP_COUNTER_LEN;
+#endif /* ILOS_ENABLED */
+    payload[0] = secrdc_get_last_delta();
+    payload++;
+  }
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
 #if AKES_NBR_WITH_INDICES
   payload[0] = akes_nbr_index_of(entry->refs[status]);
   payload++;
@@ -171,7 +216,10 @@ prepare_update_command(uint8_t cmd_id,
 #if ANTI_REPLAY_WITH_SUPPRESSION
   {
     frame802154_frame_counter_t reordered_counter;
+#if !POTR_ENABLED
+    /* otherwise this is done in adaptivesec.c */
     anti_replay_write_counter(payload);
+#endif /* !POTR_ENABLED */
     payload += 4;
     reordered_counter.u32 = LLSEC802154_HTONL(anti_replay_my_broadcast_counter);
     memcpy(payload, reordered_counter.u8, 4);
@@ -198,9 +246,25 @@ prepare_update_command(uint8_t cmd_id,
 static void
 process_update_command(struct akes_nbr *nbr, uint8_t *data, int cmd_id)
 {
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+  rtimer_clock_t t1;
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
+
   switch(cmd_id) {
   case AKES_ACK_IDENTIFIER:
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+    data += ILOS_WAKE_UP_COUNTER_LEN + SECRDC_Q_LEN + 1;
+    t1 = nbr->meta->t1;
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
     akes_nbr_free_tentative_metadata(nbr);
+#if ILOS_ENABLED
+    nbr->phase.his_wake_up_counter_at_t = wake_up_counter_parse(data);
+    data += ILOS_WAKE_UP_COUNTER_LEN;
+#endif /* ILOS_ENABLED */
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+    nbr->phase.t = t1 - data[0];
+    data += 1;
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
     nbr->sent_authentic_hello = 1;
     break;
   case AKES_HELLOACK_IDENTIFIER:
@@ -208,11 +272,15 @@ process_update_command(struct akes_nbr *nbr, uint8_t *data, int cmd_id)
     break;
   }
 
+#if !ILOS_ENABLED
   anti_replay_was_replayed(&nbr->anti_replay_info);
+#endif /* !ILOS_ENABLED */
 #if ANTI_REPLAY_WITH_SUPPRESSION
   nbr->last_was_broadcast = 1;
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
+#if !ILOS_ENABLED
   akes_nbr_prolong(nbr);
+#endif /* !ILOS_ENABLED */
 
 #if AKES_NBR_WITH_INDICES
   nbr->foreign_index = data[0];
@@ -227,6 +295,17 @@ process_update_command(struct akes_nbr *nbr, uint8_t *data, int cmd_id)
     data += 4;
   }
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
+#if POTR_ENABLED
+  switch(cmd_id) {
+  case AKES_HELLOACK_IDENTIFIER:
+  case AKES_ACK_IDENTIFIER:
+    nbr->my_unicast_seqno = 0;
+    nbr->his_unicast_seqno = 0;
+    break;
+  default:
+    break;
+  }
+#endif /* POTR_ENABLED */
 #if AKES_NBR_WITH_GROUP_KEYS
   switch(cmd_id) {
   case AKES_HELLOACK_IDENTIFIER:
@@ -235,6 +314,10 @@ process_update_command(struct akes_nbr *nbr, uint8_t *data, int cmd_id)
     break;
   }
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
+
+#if SECRDC_WITH_ORIGINAL_PHASE_LOCK
+  nbr->phase.t = 0;
+#endif /* SECRDC_WITH_ORIGINAL_PHASE_LOCK */
 }
 /*---------------------------------------------------------------------------*/
 /*
@@ -257,7 +340,7 @@ generate_pairwise_key(uint8_t *result, uint8_t *shared_secret)
 static void
 change_hello_challenge(void)
 {
-  csprng_rand(hello_challenge, AKES_NBR_CHALLENGE_LEN);
+  csprng_rand(akes_hello_challenge, AKES_NBR_CHALLENGE_LEN);
 }
 /*---------------------------------------------------------------------------*/
 void
@@ -276,12 +359,18 @@ akes_broadcast_hello(void)
   }
   leaky_bucket_pour(&hello_bucket);
 
+#if POTR_ENABLED
+  potr_clear_cached_otps();
+#endif /* POTR_ENABLED */
+
   payload = adaptivesec_prepare_command(AKES_HELLO_IDENTIFIER, &linkaddr_null);
+#if !ILOS_ENABLED
   adaptivesec_add_security_header(NULL);
   anti_replay_suppress_counter();
+#endif /* !ILOS_ENABLED */
 
   /* write payload */
-  akes_nbr_copy_challenge(payload, hello_challenge);
+  akes_nbr_copy_challenge(payload, akes_hello_challenge);
   payload += AKES_NBR_CHALLENGE_LEN;
 
   packetbuf_set_datalen(1        /* command frame identifier */
@@ -308,6 +397,21 @@ on_hello_done(void *ptr)
   change_hello_challenge();
 }
 /*---------------------------------------------------------------------------*/
+int
+akes_is_acceptable_hello(void)
+{
+  struct akes_nbr_entry *entry;
+
+  akes_nbr_delete_expired_tentatives();
+  entry = akes_nbr_get_sender_entry();
+
+  return (entry && entry->permanent)
+      || (!(entry && entry->tentative)
+      && !leaky_bucket_is_full(&helloack_bucket)
+      && (akes_nbr_count(AKES_NBR_TENTATIVE) < AKES_NBR_MAX_TENTATIVES)
+      && akes_nbr_free_slots());
+}
+/*---------------------------------------------------------------------------*/
 static enum cmd_broker_result
 on_hello(uint8_t *payload)
 {
@@ -320,20 +424,24 @@ on_hello(uint8_t *payload)
   entry = akes_nbr_get_sender_entry();
 
   if(entry && entry->permanent) {
-#if ANTI_REPLAY_WITH_SUPPRESSION
+#if ANTI_REPLAY_WITH_SUPPRESSION && !POTR_ENABLED
     anti_replay_restore_counter(&entry->permanent->anti_replay_info);
-#endif /* ANTI_REPLAY_WITH_SUPPRESSION */
+#endif /* ANTI_REPLAY_WITH_SUPPRESSION && !POTR_ENABLED */
     switch(ADAPTIVESEC_STRATEGY.verify(entry->permanent)) {
     case ADAPTIVESEC_VERIFY_SUCCESS:
+#if !ILOS_ENABLED
       akes_nbr_prolong(entry->permanent);
+#endif /* !ILOS_ENABLED */
       akes_trickle_on_fresh_authentic_hello(entry->permanent);
       return CMD_BROKER_CONSUMED;
     case ADAPTIVESEC_VERIFY_INAUTHENTIC:
       PRINTF("akes: Starting new session with permanent neighbor\n");
       break;
+#if !POTR_ENABLED
     case ADAPTIVESEC_VERIFY_REPLAYED:
       PRINTF("akes: Replayed HELLO\n");
       return CMD_BROKER_ERROR;
+#endif /* !POTR_ENABLED */
     }
   }
 
@@ -358,7 +466,11 @@ on_hello(uint8_t *payload)
 
   akes_nbr_copy_challenge(entry->tentative->challenge, payload);
   waiting_period = adaptivesec_random_clock_time(MIN_HELLOACK_DELAY, MAX_HELLOACK_DELAY);
+#if ILOS_ENABLED
+  entry->tentative->meta->expiration_time = clock_seconds()
+#else /* ILOS_ENABLED */
   entry->tentative->expiration_time = clock_seconds()
+#endif /* ILOS_ENABLED */
       + (waiting_period / CLOCK_SECOND)
       + AKES_ACK_DELAY;
   ctimer_set(&entry->tentative->meta->wait_timer,
@@ -392,6 +504,16 @@ send_helloack(void *ptr)
       AKES_NBR_TENTATIVE);
 
   /* generate pairwise key */
+#if POTR_ENABLED
+  /* create HELLOACK OTP */
+  potr_create_special_otp(&entry->tentative->meta->helloack_otp,
+      &linkaddr_node_addr,
+      challenges);
+  /* create ACK OTP */
+  potr_create_special_otp(&entry->tentative->meta->ack_otp,
+      packetbuf_addr(PACKETBUF_ADDR_RECEIVER),
+      challenges + AKES_NBR_CHALLENGE_LEN);
+#endif /* POTR_ENABLED */
   secret = AKES_SCHEME.get_secret_with_hello_sender(akes_nbr_get_addr(entry));
   if(!secret) {
     PRINTF("akes: No secret with HELLO sender\n");
@@ -400,8 +522,64 @@ send_helloack(void *ptr)
   generate_pairwise_key(challenges, secret);
   akes_nbr_copy_key(entry->tentative->tentative_pairwise_key, challenges);
 
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+  entry->tentative->meta->was_helloack_sent = 0;
+  NETSTACK_MAC.send(on_helloack_sent, NULL);
+#else /* SECRDC_WITH_SECURE_PHASE_LOCK */
   adaptivesec_send_command_frame();
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
 }
+/*---------------------------------------------------------------------------*/
+void
+akes_create_helloack(void)
+{
+#if POTR_ENABLED && !ILOS_ENABLED && ANTI_REPLAY_WITH_SUPPRESSION
+  anti_replay_write_counter(((uint8_t *)packetbuf_dataptr())
+      + 1 /* command frame identifier */
+      + SECRDC_Q_LEN
+      + AKES_NBR_CHALLENGE_LEN
+      + (AKES_NBR_WITH_INDICES ? 1 : 0));
+#endif /* POTR_ENABLED && !ILOS_ENABLED && ANTI_REPLAY_WITH_SUPPRESSION */
+
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+  {
+    uint8_t *dataptr;
+    struct akes_nbr *nbr;
+
+    dataptr = packetbuf_dataptr();
+#if ILOS_ENABLED
+    wake_up_counter_write(dataptr + 1,
+        secrdc_get_wake_up_counter(RTIMER_NOW()));
+#endif /* ILOS_ENABLED */
+    nbr = akes_nbr_get_receiver_entry()->tentative;
+    csprng_rand(nbr->meta->q, SECRDC_Q_LEN);
+    memcpy(dataptr + 1 + ILOS_WAKE_UP_COUNTER_LEN, nbr->meta->q, SECRDC_Q_LEN);
+  }
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
+}
+/*---------------------------------------------------------------------------*/
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+static void
+on_helloack_sent(void *ptr, int status, int transmissions)
+{
+  struct akes_nbr *nbr;
+  struct akes_nbr_entry *entry;
+
+  entry = akes_nbr_get_receiver_entry();
+  if(!entry || !((nbr = entry->tentative))) {
+    PRINTF("akes: Did not find tentative neighbor\n");
+    return;
+  }
+  if(status != MAC_TX_OK) {
+    PRINTF("akes: HELLOACK transmission failed\n");
+    akes_nbr_delete(entry, AKES_NBR_TENTATIVE);
+    return;
+  }
+  nbr->meta->t1 = secrdc_get_last_but_one_t1();
+  nbr->meta->strobe_index = secrdc_get_last_strobe_index();
+  nbr->meta->was_helloack_sent = 1;
+}
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
 /*---------------------------------------------------------------------------*/
 int
 akes_is_acceptable_helloack(void)
@@ -442,13 +620,13 @@ on_helloack(uint8_t *payload, int p_flag)
   }
 
   /* copy challenges and generate key */
-  akes_nbr_copy_challenge(key, hello_challenge);
-  akes_nbr_copy_challenge(key + AKES_NBR_CHALLENGE_LEN, payload);
+  akes_nbr_copy_challenge(key, akes_hello_challenge);
+  akes_nbr_copy_challenge(key + AKES_NBR_CHALLENGE_LEN, payload + ILOS_WAKE_UP_COUNTER_LEN + SECRDC_Q_LEN);
   generate_pairwise_key(key, secret);
 
 #if ANTI_REPLAY_WITH_SUPPRESSION
-  packetbuf_set_attr(PACKETBUF_ATTR_NEIGHBOR_INDEX, payload[AKES_NBR_CHALLENGE_LEN]);
-  anti_replay_parse_counter(payload + AKES_NBR_CHALLENGE_LEN + 1);
+  packetbuf_set_attr(PACKETBUF_ATTR_NEIGHBOR_INDEX, payload[ILOS_WAKE_UP_COUNTER_LEN + SECRDC_Q_LEN + AKES_NBR_CHALLENGE_LEN]);
+  anti_replay_parse_counter(payload + ILOS_WAKE_UP_COUNTER_LEN + SECRDC_Q_LEN + AKES_NBR_CHALLENGE_LEN + 1);
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
   if(adaptivesec_verify(key)) {
     PRINTF("akes: Invalid HELLOACK\n");
@@ -458,6 +636,7 @@ on_helloack(uint8_t *payload, int p_flag)
   is_new = 1;
   if(entry) {
     if(entry->permanent) {
+#if !POTR_ENABLED
       if(
 #if AKES_NBR_WITH_PAIRWISE_KEYS
           !memcmp(key, entry->permanent->pairwise_key, AES_128_KEY_LENGTH)) {
@@ -467,7 +646,9 @@ on_helloack(uint8_t *payload, int p_flag)
 
         PRINTF("akes: Replayed HELLOACK\n");
         return CMD_BROKER_ERROR;
-      } else {
+      } else
+#endif /* !POTR_ENABLED */
+      {
         akes_nbr_delete(entry, AKES_NBR_PERMANENT);
         is_new = 0;
       }
@@ -500,22 +681,38 @@ on_helloack(uint8_t *payload, int p_flag)
 #if AKES_NBR_WITH_PAIRWISE_KEYS
   akes_nbr_copy_key(entry->permanent->pairwise_key, key);
 #else /* AKES_NBR_WITH_PAIRWISE_KEYS */
+#if !POTR_ENABLED
   memcpy(entry->permanent->helloack_challenge,
       payload,
       AKES_NBR_CACHED_HELLOACK_CHALLENGE_LEN);
+#endif /* !POTR_ENABLED */
   akes_nbr_new(AKES_NBR_TENTATIVE);
   if(!entry->tentative) {
     akes_nbr_delete(entry, AKES_NBR_PERMANENT);
     return CMD_BROKER_ERROR;
   }
   entry->tentative->meta->has_wait_timer = 0;
+#if ILOS_ENABLED
+  entry->tentative->meta->expiration_time = clock_seconds()
+#else /* ILOS_ENABLED */
   entry->tentative->expiration_time = clock_seconds()
+#endif /* ILOS_ENABLED */
       + AKES_MAX_WAITING_PERIOD
       + 1 /* leeway */;
   akes_nbr_copy_key(entry->tentative->tentative_pairwise_key, key);
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+  entry->tentative->meta->strobe_index = ((uint8_t *)packetbuf_hdrptr())[POTR_HEADER_LEN];
+  memcpy(entry->tentative->meta->q, payload + ILOS_WAKE_UP_COUNTER_LEN, SECRDC_Q_LEN);
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
+#if POTR_ENABLED
+  /* create ACK OTP */
+  potr_create_special_otp(&entry->tentative->meta->ack_otp,
+      &linkaddr_node_addr,
+      payload + ILOS_WAKE_UP_COUNTER_LEN + SECRDC_Q_LEN);
+#endif /* POTR_ENABLED */
 #endif /* AKES_NBR_WITH_PAIRWISE_KEYS */
   process_update_command(entry->permanent,
-      payload + AKES_NBR_CHALLENGE_LEN,
+      payload + ILOS_WAKE_UP_COUNTER_LEN + SECRDC_Q_LEN + AKES_NBR_CHALLENGE_LEN,
       AKES_HELLOACK_IDENTIFIER);
   send_ack(entry, is_new);
   return CMD_BROKER_CONSUMED;
@@ -528,6 +725,22 @@ send_ack(struct akes_nbr_entry *entry, int is_new)
   leaky_bucket_pour(&ack_bucket);
   prepare_update_command(AKES_ACK_IDENTIFIER, entry, AKES_NBR_PERMANENT);
   NETSTACK_MAC.send(on_ack_sent, is_new ? entry : NULL);
+}
+/*---------------------------------------------------------------------------*/
+void
+akes_create_ack(void)
+{
+#if POTR_ENABLED && !ILOS_ENABLED && ANTI_REPLAY_WITH_SUPPRESSION
+  anti_replay_write_counter(((uint8_t *)packetbuf_dataptr())
+      + 1 /* command frame identifier */
+      + (SECRDC_WITH_SECURE_PHASE_LOCK ? SECRDC_Q_LEN + 2: 0)
+      + (AKES_NBR_WITH_INDICES ? 1 : 0));
+#endif /* POTR_ENABLED && !ILOS_ENABLED && ANTI_REPLAY_WITH_SUPPRESSION */
+
+#if ILOS_ENABLED
+  wake_up_counter_write(((uint8_t *)packetbuf_dataptr()) + 1,
+      secrdc_get_wake_up_counter(RTIMER_NOW()));
+#endif /* ILOS_ENABLED */
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -564,6 +777,9 @@ akes_is_acceptable_ack(struct akes_nbr_entry *entry)
 {
   return entry
       && entry->tentative
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+      && entry->tentative->meta->was_helloack_sent
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
       && ctimer_expired(&entry->tentative->meta->wait_timer);
 }
 /*---------------------------------------------------------------------------*/
@@ -576,15 +792,20 @@ on_ack(uint8_t *payload)
   PRINTF("akes: Received ACK\n");
 
   entry = akes_nbr_get_sender_entry();
+#if !SECRDC_WITH_SECURE_PHASE_LOCK
 #if ANTI_REPLAY_WITH_SUPPRESSION
   packetbuf_set_attr(PACKETBUF_ATTR_NEIGHBOR_INDEX, payload[0]);
   anti_replay_parse_counter(payload + 1);
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
   if(!akes_is_acceptable_ack(entry)
       || adaptivesec_verify(entry->tentative->tentative_pairwise_key)) {
+#if POTR_ENABLED
+    akes_nbr_delete(entry, AKES_NBR_TENTATIVE);
+#endif /* POTR_ENABLED */
     PRINTF("akes: Invalid ACK\n");
     return CMD_BROKER_ERROR;
   }
+#endif /* !SECRDC_WITH_SECURE_PHASE_LOCK */
 
   if(entry->permanent) {
     akes_nbr_delete(entry, AKES_NBR_PERMANENT);
@@ -612,39 +833,55 @@ akes_send_update(struct akes_nbr_entry *entry)
 static enum cmd_broker_result
 on_update(uint8_t cmd_id, uint8_t *payload)
 {
+#if !ILOS_ENABLED
   struct akes_nbr_entry *entry;
+#endif /* !ILOS_ENABLED */
 
   PRINTF("akes: Received %s\n", (cmd_id == AKES_UPDATE_IDENTIFIER) ? "UPDATE" : "UPDATEACK");
 
+#if !ILOS_ENABLED
   entry = akes_nbr_get_sender_entry();
   if(!entry || !entry->permanent) {
     PRINTF("akes: Invalid %s\n", (cmd_id == AKES_UPDATE_IDENTIFIER) ? "UPDATE" : "UPDATEACK");
     return CMD_BROKER_ERROR;
   }
-#if ANTI_REPLAY_WITH_SUPPRESSION
+#if !SECRDC_WITH_SECURE_PHASE_LOCK
+#if ANTI_REPLAY_WITH_SUPPRESSION && !POTR_ENABLED
   anti_replay_parse_counter(payload + 1);
-#endif /* ANTI_REPLAY_WITH_SUPPRESSION */
+#endif /* ANTI_REPLAY_WITH_SUPPRESSION  && !POTR_ENABLED */
   if(ADAPTIVESEC_STRATEGY.verify(entry->permanent)
       != ADAPTIVESEC_VERIFY_SUCCESS) {
     PRINTF("akes: Invalid %s\n", (cmd_id == AKES_UPDATE_IDENTIFIER) ? "UPDATE" : "UPDATEACK");
     return CMD_BROKER_ERROR;
   }
+#endif /* !SECRDC_WITH_SECURE_PHASE_LOCK */
+#endif /* !ILOS_ENABLED */
 
+#if POTR_ENABLED
+  if(potr_received_duplicate()) {
+    PRINTF("akes: Duplicated UPDATE\n");
+    return CMD_BROKER_ERROR;
+  }
+#endif /* POTR_ENABLED */
+
+#if !ILOS_ENABLED
   process_update_command(entry->permanent, payload, cmd_id);
 
   if(cmd_id == AKES_UPDATE_IDENTIFIER) {
     send_updateack(entry);
   }
-
+#endif /* !ILOS_ENABLED */
   return CMD_BROKER_CONSUMED;
 }
 /*---------------------------------------------------------------------------*/
+#if !ILOS_ENABLED
 static void
 send_updateack(struct akes_nbr_entry *entry)
 {
   prepare_update_command(AKES_UPDATEACK_IDENTIFIER, entry, AKES_NBR_PERMANENT);
   adaptivesec_send_command_frame();
 }
+#endif /* !ILOS_ENABLED */
 /*---------------------------------------------------------------------------*/
 static enum cmd_broker_result
 on_command(uint8_t cmd_id, uint8_t *payload)
@@ -653,7 +890,9 @@ on_command(uint8_t cmd_id, uint8_t *payload)
   switch(cmd_id) {
   case AKES_HELLOACK_IDENTIFIER:
   case AKES_HELLOACK_P_IDENTIFIER:
+#if !SECRDC_WITH_SECURE_PHASE_LOCK
   case AKES_ACK_IDENTIFIER:
+#endif /* !SECRDC_WITH_SECURE_PHASE_LOCK */
     packetbuf_set_attr(PACKETBUF_ATTR_UNENCRYPTED_BYTES,
         packetbuf_datalen() - AES_128_KEY_LENGTH - ADAPTIVESEC_UNICAST_MIC_LEN);
     break;
@@ -670,7 +909,9 @@ on_command(uint8_t cmd_id, uint8_t *payload)
   case AKES_ACK_IDENTIFIER:
     return on_ack(payload);
   case AKES_UPDATE_IDENTIFIER:
+#if !ILOS_ENABLED
   case AKES_UPDATEACK_IDENTIFIER:
+#endif /* !ILOS_ENABLED */
     return on_update(cmd_id, payload);
   default:
     return CMD_BROKER_UNCONSUMED;

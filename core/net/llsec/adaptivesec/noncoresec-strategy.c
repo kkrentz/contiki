@@ -67,25 +67,45 @@ on_frame_created(void)
   uint8_t sec_lvl;
   struct akes_nbr_entry *entry;
   uint8_t *key;
-  uint8_t *dataptr;
+#if ILOS_ENABLED
+  struct secrdc_phase *phase;
+#endif /* ILOS_ENABLED */
   uint8_t datalen;
 
   sec_lvl = adaptivesec_get_sec_lvl();
   if(sec_lvl) {
+    entry = akes_nbr_get_receiver_entry();
     if(akes_get_receiver_status() == AKES_NBR_TENTATIVE) {
-      entry = akes_nbr_get_receiver_entry();
       if(!entry || !entry->tentative) {
         return 0;
       }
       key = entry->tentative->tentative_pairwise_key;
+#if ILOS_ENABLED
+      phase = NULL;
+#endif /* ILOS_ENABLED */
     } else {
+#if ILOS_ENABLED
+      key = packetbuf_holds_broadcast()
+          ? adaptivesec_group_key
+          : entry->permanent->group_key;
+      phase = (entry && entry->permanent)
+          ? &entry->permanent->phase
+          : NULL;
+#else /* ILOS_ENABLED */
       key = adaptivesec_group_key;
+#endif /* ILOS_ENABLED */
     }
 
-    dataptr = packetbuf_dataptr();
     datalen = packetbuf_datalen();
-
-    adaptivesec_aead(key, sec_lvl & (1 << 2), dataptr + datalen, 1);
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+    secrdc_cache_unsecured_frame(key
+#if ILOS_ENABLED
+        , phase
+#endif /* ILOS_ENABLED */
+    );
+#else /* SECRDC_WITH_SECURE_PHASE_LOCK */
+    adaptivesec_aead(key, sec_lvl & (1 << 2), ((uint8_t *)packetbuf_dataptr()) + datalen, 1);
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
     packetbuf_set_datalen(datalen + adaptivesec_mic_len());
   }
   return 1;
@@ -99,15 +119,24 @@ verify(struct akes_nbr *sender)
     packetbuf_set_attr(PACKETBUF_ATTR_NEIGHBOR_INDEX, sender->foreign_index);
   }
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
-  if(adaptivesec_verify(sender->group_key)) {
+  if(adaptivesec_verify(
+#if ILOS_ENABLED
+      packetbuf_holds_broadcast()
+          ? sender->group_key
+          : adaptivesec_group_key)) {
+#else /* ILOS_ENABLED */
+      sender->group_key)) {
+#endif /* ILOS_ENABLED */
     PRINTF("noncoresec-strategy: Inauthentic frame\n");
     return ADAPTIVESEC_VERIFY_INAUTHENTIC;
   }
 
+#if !POTR_ENABLED
   if(anti_replay_was_replayed(&sender->anti_replay_info)) {
     PRINTF("noncoresec-strategy: Replayed\n");
     return ADAPTIVESEC_VERIFY_REPLAYED;
   }
+#endif /* !POTR_ENABLED */
 
   return ADAPTIVESEC_VERIFY_SUCCESS;
 }

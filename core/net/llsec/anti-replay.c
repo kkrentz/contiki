@@ -45,6 +45,8 @@
 
 #include "net/llsec/anti-replay.h"
 #include "net/packetbuf.h"
+#include "net/mac/contikimac/secrdc.h"
+#include "net/mac/contikimac/potr.h"
 
 #if LLSEC802154_USES_FRAME_COUNTER
 
@@ -110,7 +112,11 @@ anti_replay_set_counter(struct anti_replay_info *receiver_info)
 #else /* ANTI_REPLAY_WITH_SUPPRESSION */
   order_and_set_counter(++my_counter);
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+  return anti_replay_get_counter() != 0xFFFFFF;
+#else /* SECRDC_WITH_SECURE_PHASE_LOCK */
   return anti_replay_get_counter() != 0xFFFFFFFF;
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
 }
 /*---------------------------------------------------------------------------*/
 uint32_t
@@ -139,7 +145,11 @@ anti_replay_restore_counter(struct anti_replay_info *info)
   uint8_t seqno;
   frame802154_frame_counter_t copied_counter;
 
+#if POTR_ENABLED
+  seqno = packetbuf_attr(PACKETBUF_ATTR_FRAME_COUNTER_BYTES_0_1) & 0xFF;
+#else /* POTR_ENABLED */
   seqno = packetbuf_attr(PACKETBUF_ATTR_MAC_SEQNO);
+#endif /* POTR_ENABLED */
   copied_counter.u32 = packetbuf_holds_broadcast()
       ? info->his_broadcast_counter.u32
       : info->his_unicast_counter.u32;
@@ -176,6 +186,7 @@ anti_replay_was_replayed(struct anti_replay_info *info)
 
   received_counter = anti_replay_get_counter();
 
+#if ANTI_REPLAY_WITH_SUPPRESSION
   if(packetbuf_holds_broadcast()) {
 #if DEBUG
     if(received_counter < info->his_broadcast_counter.u32) {
@@ -201,6 +212,14 @@ anti_replay_was_replayed(struct anti_replay_info *info)
       return 0;
     }
   }
+#else /* ANTI_REPLAY_WITH_SUPPRESSION */
+  if(received_counter <= info->his_counter.u32) {
+    return 1;
+  } else {
+    info->his_counter.u32 = received_counter;
+    return 0;
+  }
+#endif /* ANTI_REPLAY_WITH_SUPPRESSION */
 }
 /*---------------------------------------------------------------------------*/
 #endif /* LLSEC802154_USES_FRAME_COUNTER */

@@ -72,12 +72,21 @@
 
 /* Command frame identifiers */
 enum {
+#if POTR_ENABLED
+  AKES_HELLO_IDENTIFIER = POTR_FRAME_TYPE_HELLO,
+  AKES_HELLOACK_IDENTIFIER = POTR_FRAME_TYPE_HELLOACK,
+  AKES_HELLOACK_P_IDENTIFIER = POTR_FRAME_TYPE_HELLOACK_P,
+  AKES_ACK_IDENTIFIER = POTR_FRAME_TYPE_ACK,
+#else /* POTR_ENABLED */
   AKES_HELLO_IDENTIFIER = 0x0A,
   AKES_HELLOACK_IDENTIFIER = 0x0B,
   AKES_HELLOACK_P_IDENTIFIER = 0x1B,
   AKES_ACK_IDENTIFIER = 0x0C,
+#endif /* POTR_ENABLED */
   AKES_UPDATE_IDENTIFIER = 0x0E,
+#if !ILOS_ENABLED
   AKES_UPDATEACK_IDENTIFIER = 0x0F
+#endif /* !ILOS_ENABLED */
 };
 
 /**
@@ -102,9 +111,13 @@ struct akes_scheme {
 };
 
 extern const struct akes_scheme AKES_SCHEME;
+extern uint8_t akes_hello_challenge[AKES_NBR_CHALLENGE_LEN];
 
 void akes_broadcast_hello(void);
+int akes_is_acceptable_hello(void);
+void akes_create_helloack(void);
 int akes_is_acceptable_helloack(void);
+void akes_create_ack(void);
 int akes_is_acceptable_ack(struct akes_nbr_entry *entry);
 void akes_init(void);
 void akes_send_update(struct akes_nbr_entry *entry);

@@ -72,7 +72,7 @@ struct mic {
   uint8_t u8[ADAPTIVESEC_BROADCAST_MIC_LEN];
 };
 
-#if AKES_NBR_WITH_PAIRWISE_KEYS && AKES_NBR_WITH_INDICES
+#if AKES_NBR_WITH_PAIRWISE_KEYS && AKES_NBR_WITH_INDICES && !POTR_ENABLED
 
 static struct mic mics[MAX_BUFFERED_MICS];
 static uint8_t next_mic_index;
@@ -327,4 +327,4 @@ const struct adaptivesec_strategy coresec_strategy = {
   init
 };
 /*---------------------------------------------------------------------------*/
-#endif /* AKES_NBR_WITH_PAIRWISE_KEYS && AKES_NBR_WITH_INDICES */
+#endif /* AKES_NBR_WITH_PAIRWISE_KEYS && AKES_NBR_WITH_INDICES && !POTR_ENABLED */

@@ -46,6 +46,8 @@
 #include "net/llsec/adaptivesec/akes-nbr.h"
 #include "lib/ccm-star.h"
 #include "lib/aes-128.h"
+#include "net/mac/contikimac/potr.h"
+#include "net/mac/contikimac/ilos.h"
 
 #ifdef ADAPTIVESEC_CONF_UNICAST_SEC_LVL
 #define ADAPTIVESEC_UNICAST_SEC_LVL ADAPTIVESEC_CONF_UNICAST_SEC_LVL
@@ -86,7 +88,9 @@
 enum adaptivesec_verify {
   ADAPTIVESEC_VERIFY_SUCCESS,
   ADAPTIVESEC_VERIFY_INAUTHENTIC,
+#if !POTR_ENABLED
   ADAPTIVESEC_VERIFY_REPLAYED
+#endif /* !POTR_ENABLED */
 };
 
 /**
@@ -123,7 +127,9 @@ int adaptivesec_is_hello(void);
 int adaptivesec_is_helloack(void);
 int adaptivesec_is_ack(void);
 uint8_t adaptivesec_get_sec_lvl(void);
+#if !ILOS_ENABLED
 void adaptivesec_add_security_header(struct akes_nbr *receiver);
+#endif /* !ILOS_ENABLED */
 uint8_t *adaptivesec_prepare_command(uint8_t cmd_id, const linkaddr_t *dest);
 void adaptivesec_send_command_frame(void);
 uint8_t adaptivesec_mic_len(void);

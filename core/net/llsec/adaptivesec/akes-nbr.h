@@ -46,6 +46,9 @@
 #include "lib/aes-128.h"
 #include "sys/clock.h"
 #include "sys/ctimer.h"
+#include "net/mac/contikimac/potr.h"
+#include "net/mac/contikimac/secrdc.h"
+#include "net/mac/contikimac/ilos.h"
 
 #ifdef AKES_NBR_CONF_MAX_TENTATIVES
 #define AKES_NBR_MAX_TENTATIVES AKES_NBR_CONF_MAX_TENTATIVES
@@ -112,11 +115,29 @@ struct akes_nbr_tentative {
 #if !AKES_NBR_WITH_PAIRWISE_KEYS
   uint8_t has_wait_timer;
 #endif /* !AKES_NBR_WITH_PAIRWISE_KEYS */
+#if POTR_ENABLED
+  potr_otp_t helloack_otp;
+  potr_otp_t ack_otp;
+#endif /* POTR_ENABLED */
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+  uint8_t q[SECRDC_Q_LEN];
+  rtimer_clock_t t1;
+  uint8_t strobe_index;
+  int was_helloack_sent;
+#if ILOS_ENABLED
+  unsigned long expiration_time;
+#endif /* ILOS_ENABLED */
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
 };
 
 struct akes_nbr {
+#if !ILOS_ENABLED
   struct anti_replay_info anti_replay_info;
   unsigned long expiration_time;
+#endif /* !ILOS_ENABLED */
+#if SECRDC_WITH_ORIGINAL_PHASE_LOCK
+  struct secrdc_phase phase;
+#endif /* SECRDC_WITH_ORIGINAL_PHASE_LOCK */
 
   union {
     /* permanent */
@@ -127,16 +148,28 @@ struct akes_nbr {
 #if AKES_NBR_WITH_GROUP_KEYS
       uint8_t group_key[AES_128_KEY_LENGTH];
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
+#if ILOS_ENABLED
+      uint8_t sent_authentic_hello:1;
+      uint8_t is_receiving_update:1;
+#else /* ILOS_ENABLED */
       uint8_t sent_authentic_hello;
-#if !AKES_NBR_WITH_PAIRWISE_KEYS
+#endif /* ILOS_ENABLED */
+#if !POTR_ENABLED && !AKES_NBR_WITH_PAIRWISE_KEYS
       uint8_t helloack_challenge[AKES_NBR_CACHED_HELLOACK_CHALLENGE_LEN];
-#endif /* !AKES_NBR_WITH_PAIRWISE_KEYS */
+#endif /* !POTR_ENABLED && !AKES_NBR_WITH_PAIRWISE_KEYS */
+#if POTR_ENABLED
+      uint8_t my_unicast_seqno;
+      uint8_t his_unicast_seqno;
+#endif /* POTR_ENABLED */
 #if ANTI_REPLAY_WITH_SUPPRESSION
       uint8_t last_was_broadcast;
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
 #if AKES_NBR_WITH_INDICES
       uint8_t foreign_index;
 #endif /* AKES_NBR_WITH_INDICES */
+#if SECRDC_WITH_SECURE_PHASE_LOCK
+      struct secrdc_phase phase;
+#endif /* SECRDC_WITH_SECURE_PHASE_LOCK */
     };
 
     /* tentative */
@@ -166,8 +199,10 @@ struct akes_nbr_entry *akes_nbr_next(struct akes_nbr_entry *current);
 int akes_nbr_count(enum akes_nbr_status status);
 int akes_nbr_free_slots(void);
 struct akes_nbr_entry *akes_nbr_new(enum akes_nbr_status status);
+#if !ILOS_ENABLED
 void akes_nbr_do_prolong(struct akes_nbr *nbr, uint16_t seconds);
 void akes_nbr_prolong(struct akes_nbr *nbr);
+#endif /* !ILOS_ENABLED */
 struct akes_nbr_entry *akes_nbr_get_entry(const linkaddr_t *addr);
 struct akes_nbr_entry *akes_nbr_get_sender_entry(void);
 struct akes_nbr_entry *akes_nbr_get_receiver_entry(void);
@@ -175,5 +210,9 @@ void akes_nbr_delete(struct akes_nbr_entry *entry, enum akes_nbr_status status);
 int akes_nbr_is_expired(struct akes_nbr_entry *entry, enum akes_nbr_status status);
 void akes_nbr_delete_expired_tentatives(void);
 void akes_nbr_init(void);
+#if POTR_ENABLED
+/* declared here to avoid compilation errors */
+void potr_set_seqno(struct akes_nbr *receiver);
+#endif /* POTR_ENABLED */
 
 #endif /* AKES_NBR_H_ */
