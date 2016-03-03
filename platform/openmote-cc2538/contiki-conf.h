@@ -456,7 +456,9 @@ typedef uint32_t rtimer_clock_t;
 #if NETSTACK_CONF_WITH_IPV6
 /* Addresses, Sizes and Interfaces */
 /* 8-byte addresses here, 2 otherwise */
+#ifndef LINKADDR_CONF_SIZE
 #define LINKADDR_CONF_SIZE                   8
+#endif /* LINKADDR_CONF_SIZE */
 #define UIP_CONF_LL_802154                   1
 #define UIP_CONF_LLH_LEN                     0
 #define UIP_CONF_NETIF_MAX_ADDRESSES         3
