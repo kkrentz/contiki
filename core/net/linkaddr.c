@@ -46,7 +46,9 @@
 #include <string.h>
 
 linkaddr_t linkaddr_node_addr;
-#if LINKADDR_SIZE == 2
+#if LINKADDR_SIZE == 1
+const linkaddr_t linkaddr_null = { { 0 } };
+#elif LINKADDR_SIZE == 2
 const linkaddr_t linkaddr_null = { { 0, 0 } };
 #else /*LINKADDR_SIZE == 2*/
 #if LINKADDR_SIZE == 8

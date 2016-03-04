@@ -50,7 +50,17 @@
 /*---------------------------------------------------------------------------*/
 static const uint8_t *
 get_extended_address(const linkaddr_t *addr)
-#if LINKADDR_SIZE == 2
+#if LINKADDR_SIZE == 1
+{
+  /* workaround for short addresses: derive EUI64 as in RFC 6282 */
+  static linkaddr_extended_t template = { { 0x00 , 0x00 , 0x00 ,
+                                            0xFF , 0xFE , 0x00 , 0x00 , 0x00 } };
+
+  template.u8[7] = addr->u8[0];
+
+  return template.u8;
+}
+#elif LINKADDR_SIZE == 2
 {
   /* workaround for short addresses: derive EUI64 as in RFC 6282 */
   static linkaddr_extended_t template = { { 0x00 , 0x00 , 0x00 ,
