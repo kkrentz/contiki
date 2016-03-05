@@ -161,10 +161,12 @@ akes_nbr_new(enum akes_nbr_status status)
     }
   }
 
+  AKES_NBR_GET_LOCK();
   entry->refs[status] = memb_alloc(&nbrs_memb);
   if(!entry->refs[status]) {
     PRINTF("akes-nbr: RAM is running low\n");
     on_entry_change(entry);
+    AKES_NBR_RELEASE_LOCK();
     return NULL;
   }
   nbr_table_lock(entries_table, entry);
@@ -177,6 +179,7 @@ akes_nbr_new(enum akes_nbr_status status)
       return NULL;
     }
   }
+  AKES_NBR_RELEASE_LOCK();
   return entry;
 }
 /*---------------------------------------------------------------------------*/
@@ -226,12 +229,14 @@ akes_nbr_get_receiver_entry(void)
 void
 akes_nbr_delete(struct akes_nbr_entry *entry, enum akes_nbr_status status)
 {
+  AKES_NBR_GET_LOCK();
   if(status) {
     akes_nbr_free_tentative_metadata(entry->refs[status]);
   }
   memb_free(&nbrs_memb, entry->refs[status]);
   entry->refs[status] = NULL;
   on_entry_change(entry);
+  AKES_NBR_RELEASE_LOCK();
 }
 /*---------------------------------------------------------------------------*/
 int
