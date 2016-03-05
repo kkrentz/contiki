@@ -343,6 +343,8 @@ nbr_table_add_lladdr(nbr_table_t *table, const linkaddr_t *lladdr, nbr_table_rea
   nbr_table_item_t *item;
   nbr_table_key_t *key;
 
+  NBR_TABLE_GET_LOCK();
+
   /* Allow lladdr-free insertion, useful e.g. for IPv6 ND.
    * Only one such entry is possible at a time, indexed by linkaddr_null. */
   if(lladdr == NULL) {
@@ -355,6 +357,7 @@ nbr_table_add_lladdr(nbr_table_t *table, const linkaddr_t *lladdr, nbr_table_rea
 
     /* No space available for new entry */
     if(key == NULL) {
+      NBR_TABLE_RELEASE_LOCK();
       return NULL;
     }
 
@@ -375,9 +378,12 @@ nbr_table_add_lladdr(nbr_table_t *table, const linkaddr_t *lladdr, nbr_table_rea
   memset(item, 0, table->item_size);
   nbr_set_bit(used_map, table, item, 1);
 
+  NBR_TABLE_RELEASE_LOCK();
+
 #if DEBUG
   print_table();
 #endif
+
   return item;
 }
 /*---------------------------------------------------------------------------*/
@@ -393,8 +399,11 @@ nbr_table_get_from_lladdr(nbr_table_t *table, const linkaddr_t *lladdr)
 int
 nbr_table_remove(nbr_table_t *table, void *item)
 {
-  int ret = nbr_set_bit(used_map, table, item, 0);
+  int ret;
+  NBR_TABLE_GET_LOCK();
+  ret = nbr_set_bit(used_map, table, item, 0);
   nbr_set_bit(locked_map, table, item, 0);
+  NBR_TABLE_RELEASE_LOCK();
   return ret;
 }
 /*---------------------------------------------------------------------------*/
@@ -435,21 +444,25 @@ nbr_table_update_lladdr(const linkaddr_t *old_addr, const linkaddr_t *new_addr,
 {
   int index;
   int new_index;
+  NBR_TABLE_GET_LOCK();
   nbr_table_key_t *key;
   index = index_from_lladdr(old_addr);
   if(index == -1) {
     /* Failure to change since there is nothing to change. */
+    NBR_TABLE_RELEASE_LOCK();
     return 0;
   }
   if((new_index = index_from_lladdr(new_addr)) != -1) {
     /* check if it is a change or not - do not remove / fail if same */
     if(new_index == index) {
+      NBR_TABLE_RELEASE_LOCK();
       return 1;
     }
     /* This new entry already exists - failure! - remove if requested. */
     if(remove_if_duplicate) {
       remove_key(key_from_index(index));
     }
+    NBR_TABLE_RELEASE_LOCK();
     return 0;
   }
   key = key_from_index(index);
@@ -458,6 +471,7 @@ nbr_table_update_lladdr(const linkaddr_t *old_addr, const linkaddr_t *new_addr,
    * conflicting entry.
    */
   memcpy(&key->lladdr, new_addr, sizeof(linkaddr_t));
+  NBR_TABLE_RELEASE_LOCK();
   return 1;
 }
 /*---------------------------------------------------------------------------*/
