@@ -45,12 +45,31 @@ or
 ```
 , respectively.
 
-Also, set a network-wide key by adding:
+`noncoresec-autoconf.h` configures the `single_akes_scheme` by default. This scheme requires setting a network-wide key:
 ```c
 #define SINGLE_CONF_KEY { 0x00 , 0x01 , 0x02 , 0x03 , \
                           0x04 , 0x05 , 0x06 , 0x07 , \
                           0x08 , 0x09 , 0x0A , 0x0B , \
                           0x0C , 0x0D , 0x0E , 0x0F }
+```
+
+`coresec-autoconf.h`, on the other hand, configures the `fully_akes_scheme` by default. This scheme requires preloading pairwise keys and a node id.
+
+```
+cd examples/llsec/fully/
+```
+```
+make clean && make burn-nodeid.upload nodeid=8 && make Login
+```
+Fill out preload.c
+```
+make preload.upload && make login
+```
+
+Also, a current limitation of the `fully_akes_scheme` is that it does only support 2-byte short addresses. Therefore, add:
+```c
+#undef LINKADDR_CONF_SIZE
+#define LINKADDR_CONF_SIZE 2
 ```
 
 Finally, configure a `seeder` like so

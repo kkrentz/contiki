@@ -47,6 +47,8 @@
 #define AKES_NBR_CONF_WITH_PAIRWISE_KEYS      1
 #undef AKES_NBR_CONF_WITH_INDICES
 #define AKES_NBR_CONF_WITH_INDICES            1
+#undef AKES_CONF_SCHEME
+#define AKES_CONF_SCHEME                      fully_akes_scheme
 
 #ifndef ADAPTIVESEC_CONF_UNICAST_SEC_LVL
 #define ADAPTIVESEC_CONF_UNICAST_SEC_LVL      6
