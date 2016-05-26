@@ -38,6 +38,9 @@ typedef uint32_t uip_stats_t;
  */
 typedef uint32_t rtimer_clock_t;
 #define RTIMER_CLOCK_DIFF(a,b)     ((int32_t)((a)-(b)))
+
+#undef RTIMER_CONF_GUARD_TIME
+#define RTIMER_CONF_GUARD_TIME (7)
 /** @} */
 /*---------------------------------------------------------------------------*/
 /* 352us from calling transmit() until the SFD byte has been sent */
