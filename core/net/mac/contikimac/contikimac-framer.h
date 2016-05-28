@@ -40,6 +40,7 @@
 #ifndef CONTIKIMAC_FRAMER_H_
 #define CONTIKIMAC_FRAMER_H_
 
+#include "contiki.h"
 #include "net/mac/framer.h"
 
 #ifdef CONTIKIMAC_FRAMER_CONF_ENABLED
@@ -47,6 +48,21 @@
 #else /* CONTIKIMAC_FRAMER_CONF_ENABLED */
 #define CONTIKIMAC_FRAMER_ENABLED 0
 #endif /* CONTIKIMAC_FRAMER_CONF_ENABLED */
+
+/* CONTIKIMAC_FRAMER_SHORTEST_PACKET_SIZE is the shortest packet that ContikiMAC
+   allows. Packets have to be a certain size to be able to be detected
+   by two consecutive CCA checks, and here is where we define this
+   shortest size.
+   Padded packets will have the wrong ipv6 checksum unless CONTIKIMAC_HEADER
+   is used (on both sides) and the receiver will ignore them.
+   With no header, reduce to transmit a proper multicast RPL DIS. */
+#ifdef CONTIKIMAC_FRAMER_CONF_SHORTEST_PACKET_SIZE
+#define CONTIKIMAC_FRAMER_SHORTEST_PACKET_SIZE CONTIKIMAC_FRAMER_CONF_SHORTEST_PACKET_SIZE
+#else /* CONTIKIMAC_FRAMER_CONF_SHORTEST_PACKET_SIZE */
+#define CONTIKIMAC_FRAMER_SHORTEST_PACKET_SIZE 43
+#endif /* CONTIKIMAC_FRAMER_CONF_SHORTEST_PACKET_SIZE */
+
+#define CONTIKIMAC_FRAMER_HEADER_LEN 1
 
 extern const struct framer contikimac_framer;
 
