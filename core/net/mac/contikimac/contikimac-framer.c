@@ -42,21 +42,6 @@
 #include "net/netstack.h"
 #include <string.h>
 
-#define CONTIKIMAC_HEADER_LEN 1
-
-/* SHORTEST_PACKET_SIZE is the shortest packet that ContikiMAC
-   allows. Packets have to be a certain size to be able to be detected
-   by two consecutive CCA checks, and here is where we define this
-   shortest size.
-   Padded packets will have the wrong ipv6 checksum unless CONTIKIMAC_HEADER
-   is used (on both sides) and the receiver will ignore them.
-   With no header, reduce to transmit a proper multicast RPL DIS. */
-#ifdef CONTIKIMAC_FRAMER_CONF_SHORTEST_PACKET_SIZE
-#define SHORTEST_PACKET_SIZE CONTIKIMAC_FRAMER_CONF_SHORTEST_PACKET_SIZE
-#else /* CONTIKIMAC_FRAMER_CONF_SHORTEST_PACKET_SIZE */
-#define SHORTEST_PACKET_SIZE 43
-#endif /* CONTIKIMAC_FRAMER_CONF_SHORTEST_PACKET_SIZE */
-
 #ifdef CONTIKIMAC_FRAMER_CONF_DECORATED_FRAMER
 #define DECORATED_FRAMER CONTIKIMAC_FRAMER_CONF_DECORATED_FRAMER
 #else /* CONTIKIMAC_FRAMER_CONF_DECORATED_FRAMER */
@@ -77,7 +62,7 @@ extern const struct framer DECORATED_FRAMER;
 static int
 hdr_length(void)
 {
-  return DECORATED_FRAMER.length() + CONTIKIMAC_HEADER_LEN;
+  return DECORATED_FRAMER.length() + CONTIKIMAC_FRAMER_HEADER_LEN;
 }
 /*---------------------------------------------------------------------------*/
 static int
@@ -89,7 +74,7 @@ create(void)
   int padding_bytes;
 
   /* allocate space for the ContikiMAC header */
-  if(packetbuf_hdralloc(CONTIKIMAC_HEADER_LEN) == 0) {
+  if(packetbuf_hdralloc(CONTIKIMAC_FRAMER_HEADER_LEN) == 0) {
     PRINTF("contikimac-framer: too large header\n");
     return FRAMER_FAILED;
   }
@@ -106,7 +91,7 @@ create(void)
   /* write original datalen and pad if necessary */
   dataptr = packetbuf_dataptr();
   dataptr[-1] = packetbuf_datalen();
-  padding_bytes = SHORTEST_PACKET_SIZE - packetbuf_totlen();
+  padding_bytes = CONTIKIMAC_FRAMER_SHORTEST_PACKET_SIZE - packetbuf_totlen();
   if(padding_bytes > 0) {
     memset(dataptr + packetbuf_datalen(), 0, padding_bytes);
     packetbuf_set_datalen(packetbuf_datalen() + padding_bytes);
@@ -114,7 +99,7 @@ create(void)
 
   packetbuf_compact();
 
-  return hdr_len + CONTIKIMAC_HEADER_LEN;
+  return hdr_len + CONTIKIMAC_FRAMER_HEADER_LEN;
 }
 /*---------------------------------------------------------------------------*/
 static int
@@ -130,7 +115,7 @@ parse(void)
   }
 
   /* process the ContikiMAC header */
-  if(!packetbuf_hdrreduce(CONTIKIMAC_HEADER_LEN)) {
+  if(!packetbuf_hdrreduce(CONTIKIMAC_FRAMER_HEADER_LEN)) {
     PRINTF("contikimac-framer: packetbuf_hdrreduce failed\n");
     return FRAMER_FAILED;
   }
@@ -138,7 +123,7 @@ parse(void)
   packetbuf_set_datalen(dataptr[-1]);
   dataptr[-1] = 0;
 
-  return hdr_len + CONTIKIMAC_HEADER_LEN;
+  return hdr_len + CONTIKIMAC_FRAMER_HEADER_LEN;
 }
 /*---------------------------------------------------------------------------*/
 const struct framer contikimac_framer = {
