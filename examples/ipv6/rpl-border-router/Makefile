@@ -3,6 +3,8 @@ all: $(CONTIKI_PROJECT)
 
 CONTIKI=../../..
 
+MODULES += core/net/llsec/adaptivesec
+
 #linker optimizations
 SMALL=1
 
@@ -25,7 +27,7 @@ ifeq ($(MAKE_WITH_NON_STORING),1)
 CFLAGS += -DWITH_NON_STORING=1
 endif
 
-WITH_WEBSERVER=1
+WITH_WEBSERVER=0
 ifeq ($(WITH_WEBSERVER),1)
 CFLAGS += -DUIP_CONF_TCP=1
 CFLAGS += -DWEBSERVER=1

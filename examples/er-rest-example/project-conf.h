@@ -102,4 +102,37 @@
 
 /* Enable client-side support for COAP observe */
 #define COAP_OBSERVE_CLIENT 1
+
+/* configure RADIO, RDC, and MAC layer */
+#include "cpu/cc2538/dev/cc2538-rf-async-autoconf.h"
+#include "net/mac/contikimac/secrdc-autoconf.h"
+
+/* configure LLSEC layer */
+#undef ADAPTIVESEC_CONF_UNICAST_SEC_LVL
+#define ADAPTIVESEC_CONF_UNICAST_SEC_LVL 2
+#undef ADAPTIVESEC_CONF_BROADCAST_SEC_LVL
+#define ADAPTIVESEC_CONF_BROADCAST_SEC_LVL 2
+#undef LLSEC802154_CONF_USES_AUX_HEADER
+#define LLSEC802154_CONF_USES_AUX_HEADER 0
+#undef NBR_TABLE_CONF_MAX_NEIGHBORS
+#define NBR_TABLE_CONF_MAX_NEIGHBORS 14
+#if 0
+#include "net/llsec/adaptivesec/coresec-autoconf.h"
+#else
+#include "net/llsec/adaptivesec/noncoresec-autoconf.h"
+#endif
+#if 1
+#include "net/mac/contikimac/potr-autoconf.h"
+#if 1
+#include "net/mac/contikimac/ilos-autoconf.h"
+#endif
+#endif
+
+/* configure FRAMERs */
+#include "net/mac/contikimac/framer-autoconf.h"
+
+/* set a seeder */
+#undef CSPRNG_CONF_SEEDER
+#define CSPRNG_CONF_SEEDER cc2538_mix_seeder
+
 #endif /* __PROJECT_ERBIUM_CONF_H__ */

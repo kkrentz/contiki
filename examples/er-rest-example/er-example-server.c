@@ -99,6 +99,14 @@ extern resource_t res_radio;
 extern resource_t res_sht11;
 #endif
 */
+#ifdef PLATFORM_HAS_SHT21
+#include "dev/sht21.h"
+extern resource_t res_sht21;
+#endif
+#ifdef PLATFORM_HAS_MAX44009
+#include "dev/max44009.h"
+extern resource_t res_max44009;
+#endif
 
 PROCESS(er_example_server, "Erbium Example Server");
 AUTOSTART_PROCESSES(&er_example_server);
@@ -131,12 +139,12 @@ PROCESS_THREAD(er_example_server, ev, data)
    * WARNING: Activating twice only means alternate path, not two instances!
    * All static variables are the same for each URI path.
    */
-  rest_activate_resource(&res_hello, "test/hello");
+/*  rest_activate_resource(&res_hello, "test/hello"); */
 /*  rest_activate_resource(&res_mirror, "debug/mirror"); */
 /*  rest_activate_resource(&res_chunks, "test/chunks"); */
 /*  rest_activate_resource(&res_separate, "test/separate"); */
-  rest_activate_resource(&res_push, "test/push");
-/*  rest_activate_resource(&res_event, "sensors/button"); */
+/*  rest_activate_resource(&res_push, "test/push"); */
+  rest_activate_resource(&res_event, "sensors/button");
 /*  rest_activate_resource(&res_sub, "test/sub"); */
 /*  rest_activate_resource(&res_b1_sep_b2, "test/b1sepb2"); */
 #if PLATFORM_HAS_LEDS
@@ -165,6 +173,14 @@ PROCESS_THREAD(er_example_server, ev, data)
   SENSORS_ACTIVATE(sht11_sensor);  
 #endif
 */
+#ifdef PLATFORM_HAS_SHT21
+  rest_activate_resource(&res_sht21, "sensors/sht21");
+  SENSORS_ACTIVATE(sht21);
+#endif
+#ifdef PLATFORM_HAS_MAX44009
+  rest_activate_resource(&res_max44009, "sensors/max44009");
+  SENSORS_ACTIVATE(max44009);
+#endif
 
   /* Define application-specific events here. */
   while(1) {
