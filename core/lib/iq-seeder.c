@@ -48,6 +48,12 @@
 #define SAMPLING_RATE 200 /* Hz */
 #endif /* IQ_SEEDER_CONF_SAMPLING_RATE */
 
+#ifdef IQ_SEEDER_CONF_RADIO
+#define RADIO IQ_SEEDER_CONF_RADIO
+#else /* IQ_SEEDER_CONF_RADIO */
+#define RADIO NETSTACK_RADIO
+#endif /* IQ_SEEDER_CONF_RADIO */
+
 #define COLUMN_COUNT  50
 #define ROW_COUNT     16
 
@@ -126,9 +132,9 @@ seed_16_bytes(uint8_t *result)
   byte_pos = 0;
   memset(accumulator, 0, COLUMN_COUNT);
 
-  NETSTACK_RADIO.on();
+  RADIO.on();
   for(iq_count = 0; iq_count <= (COLUMN_COUNT * 8 / 2); iq_count++) {
-    NETSTACK_RADIO.get_value(RADIO_PARAM_IQ_LSBS, &iq);
+    RADIO.get_value(RADIO_PARAM_IQ_LSBS, &iq);
 
     if(!iq_count) {
       /* drop first I/Q reading because it is always 0 for some reason */
@@ -143,15 +149,17 @@ seed_16_bytes(uint8_t *result)
       byte_pos++;
     }
   }
-  NETSTACK_RADIO.off();
+  RADIO.off();
   extract(result, accumulator);
 }
 /*---------------------------------------------------------------------------*/
 static void
 generate_seed(struct csprng_seed *result)
 {
+  RADIO.set_value(RADIO_PARAM_SHR_SEARCH, 0);
   seed_16_bytes(result->key);
   seed_16_bytes(result->state);
+  RADIO.set_value(RADIO_PARAM_SHR_SEARCH, 1);
 }
 /*---------------------------------------------------------------------------*/
 const struct csprng_seeder iq_seeder = {

@@ -49,6 +49,14 @@
 #include "dev/soc-adc.h"
 #include "dev/sys-ctrl.h"
 #include "reg.h"
+#include "net/netstack.h"
+
+#ifdef RANDOM_CONF_RADIO
+#define RADIO RANDOM_CONF_RADIO
+#else /* RANDOM_CONF_RADIO */
+#define RADIO NETSTACK_RADIO
+#endif /* RANDOM_CONF_RADIO */
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief      Generates a new random number using the cc2538 RNG.
@@ -85,6 +93,7 @@ random_init(unsigned short seed)
 {
   int i;
   unsigned short s = 0;
+  radio_value_t iq;
 
   /* Make sure the RNG is on */
   REG(SOC_ADC_ADCCON1) &= ~(SOC_ADC_ADCCON1_RCTRL1 | SOC_ADC_ADCCON1_RCTRL0);
@@ -100,14 +109,8 @@ random_init(unsigned short seed)
   REG(RFCORE_XREG_FRMCTRL0) = 0x00000008;
 
   /* Turn RF on */
-  CC2538_RF_CSP_ISRXON();
-
-  /*
-   * Wait until "the chip has been in RX long enough for the transients to
-   * have died out. A convenient way to do this is to wait for the RSSI-valid
-   * signal to go high."
-   */
-  while(!(REG(RFCORE_XREG_RSSISTAT) & RFCORE_XREG_RSSISTAT_RSSI_VALID));
+  RADIO.set_value(RADIO_PARAM_SHR_SEARCH, 0);
+  RADIO.on();
 
   /*
    * Form the seed by concatenating bits from IF_ADC in the RF receive path.
@@ -116,9 +119,10 @@ random_init(unsigned short seed)
    * Invalid seeds are 0x0000 and 0x8003 and should not be used.
    */
   while(s == 0x0000 || s == 0x8003) {
-    for(i = 0; i < 16; i++) {
-      s |= (REG(RFCORE_XREG_RFRND) & RFCORE_XREG_RFRND_IRND);
-      s <<= 1;
+    for(i = 0; i < 8; i++) {
+      RADIO.get_value(RADIO_PARAM_IQ_LSBS, &iq);
+      s |= iq;
+      s <<= 2;
     }
   }
 
@@ -127,7 +131,8 @@ random_init(unsigned short seed)
   REG(SOC_ADC_RNDL) = s & 0xFF;
 
   /* RF Off. NETSTACK_RADIO.init() will sort out normal RF operation */
-  CC2538_RF_CSP_ISRFOFF();
+  RADIO.off();
+  RADIO.set_value(RADIO_PARAM_SHR_SEARCH, 1);
 }
 
 /**

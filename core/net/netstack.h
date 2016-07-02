@@ -88,6 +88,13 @@
 #error Change NETSTACK_RDC_CONF_CHANNEL_CHECK_RATE in contiki-conf.h, project-conf.h or in your Makefile.
 #endif
 
+#ifndef NETSTACK_RADIO_ASYNC
+#ifdef NETSTACK_CONF_RADIO_ASYNC
+#define NETSTACK_RADIO_ASYNC NETSTACK_CONF_RADIO_ASYNC
+#else /* NETSTACK_CONF_RADIO_ASYNC */
+#define NETSTACK_RADIO_ASYNC nullradioasync_driver
+#endif /* NETSTACK_CONF_RADIO_ASYNC */
+#endif /* NETSTACK_RADIO_ASYNC */
 
 #ifndef NETSTACK_RADIO
 #ifdef NETSTACK_CONF_RADIO
@@ -110,6 +117,7 @@
 #include "net/mac/rdc.h"
 #include "net/mac/framer.h"
 #include "dev/radio.h"
+#include "dev/radio-async.h"
 
 /**
  * The structure of a network driver in Contiki.
@@ -130,6 +138,7 @@ extern const struct rdc_driver     NETSTACK_RDC;
 extern const struct mac_driver     NETSTACK_MAC;
 extern const struct radio_driver   NETSTACK_RADIO;
 extern const struct framer         NETSTACK_FRAMER;
+extern const struct radio_async_driver NETSTACK_RADIO_ASYNC;
 
 void netstack_init(void);
 
