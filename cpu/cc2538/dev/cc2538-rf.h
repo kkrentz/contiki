@@ -51,14 +51,14 @@
  * RF Config
  *---------------------------------------------------------------------------*/
 /* Constants */
-#define CC2538_RF_CCA_THRES_USER_GUIDE 0xF8
+#define CC2538_RF_CCA_THRES_USER_GUIDE (-81)
 #define CC2538_RF_TX_POWER_RECOMMENDED 0xD5 /* ToDo: Determine value */
 #define CC2538_RF_CHANNEL_MIN            11
 #define CC2538_RF_CHANNEL_MAX            26
 #define CC2538_RF_CHANNEL_SPACING         5
 #define CC2538_RF_CHANNEL_SET_ERROR      -1
 #define CC2538_RF_MAX_PACKET_LEN        127
-#define CC2538_RF_MIN_PACKET_LEN          4
+#define CC2538_RF_MIN_PACKET_LEN          2
 #define CC2538_RF_CCA_CLEAR               1
 #define CC2538_RF_CCA_BUSY                0
 /*---------------------------------------------------------------------------*/
@@ -71,7 +71,7 @@
 #ifdef CC2538_RF_CONF_CCA_THRES
 #define CC2538_RF_CCA_THRES CC2538_RF_CONF_CCA_THRES
 #else
-#define CC2538_RF_CCA_THRES CC2538_RF_CCA_THRES_USER_GUIDE
+#define CC2538_RF_CCA_THRES CC2538_RF_CCA_THRES_USER_GUIDE /** User guide recommendation */
 #endif /* CC2538_RF_CONF_CCA_THRES */
 
 #ifdef CC2538_RF_CONF_CHANNEL

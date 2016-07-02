@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, Swedish Institute of Computer Science.
+ * Copyright (c) 2017, Hasso-Plattner-Institut.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,21 +32,16 @@
 
 /**
  * \file
- *         Initialiation file for the Contiki low-layer network stack (NETSTACK)
+ *         Surrogate for NETSTACK_RADIO_ASYNC.
  * \author
- *         Adam Dunkels <adam@sics.se>
+ *         Konrad Krentz <konrad.krentz@gmail.com>
  */
 
-#include "net/netstack.h"
-/*---------------------------------------------------------------------------*/
-void
-netstack_init(void)
-{
-  NETSTACK_RADIO.init();
-  NETSTACK_RADIO_ASYNC.init();
-  NETSTACK_RDC.init();
-  NETSTACK_MAC.init();
-  NETSTACK_LLSEC.init();
-  NETSTACK_NETWORK.init();
-}
-/*---------------------------------------------------------------------------*/
+#ifndef NULLRADIOASYNC_H_
+#define NULLRADIOASYNC_H_
+
+#include "dev/radio-async.h"
+
+extern const struct radio_async_driver nullradioasync_driver;
+
+#endif /* NULLRADIOASYNC_H_ */

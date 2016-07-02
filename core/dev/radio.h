@@ -57,6 +57,7 @@
 #ifndef RADIO_H_
 #define RADIO_H_
 
+#include "contiki.h"
 #include <stddef.h>
 
 /**
@@ -173,6 +174,27 @@ enum {
    * it needs to be used with radio.get_object()/set_object(). */
   RADIO_PARAM_LAST_PACKET_TIMESTAMP,
 
+  /* For enabling and disabling the SHR search */
+  RADIO_PARAM_SHR_SEARCH,
+
+  /* number of zero symbols for detecting incoming synchronization headers */
+  RADIO_PARAM_SHR_DEM_ZEROES,
+
+  /* number of zero symbols in outgoing synchronization headers */
+  RADIO_PARAM_SHR_MOD_ZEROES,
+  
+  /* controls when SHR search may begin */
+  RADIO_PARAM_SHR_THRESHOLD,
+
+  /* SFD callback */
+  RADIO_PARAM_SFD_CALLBACK,
+
+  /* FIFOP callback */
+  RADIO_PARAM_FIFOP_CALLBACK,
+
+  /* TXDONE callback */
+  RADIO_PARAM_TXDONE_CALLBACK,
+
   /* Constants (read only) */
 
   /* The lowest radio channel. */
@@ -185,6 +207,10 @@ enum {
   /* The maximum transmission power in dBm. */
   RADIO_CONST_TXPOWER_MAX
 };
+
+typedef void (* radio_sfd_callback_t)(void);
+typedef void (* radio_fifop_callback_t)(void);
+typedef void (* radio_txdone_callback_t)(void);
 
 /* Radio power modes */
 enum {

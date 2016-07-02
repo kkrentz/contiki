@@ -43,6 +43,19 @@
 #include "rom-util.h"
 
 #include <stdint.h>
+
+#ifdef STARTUP_GCC_CONF_RFCORE_RXTX_ISR
+#define RFCORE_RXTX_ISR STARTUP_GCC_CONF_RFCORE_RXTX_ISR
+#else /* STARTUP_GCC_CONF_RFCORE_RXTX_ISR */
+#define RFCORE_RXTX_ISR cc2538_rf_rx_tx_isr
+#endif /* STARTUP_GCC_CONF_RFCORE_RXTX_ISR */
+
+#ifdef STARTUP_GCC_CONF_RFCORE_ERROR_ISR
+#define RFCORE_ERROR_ISR STARTUP_GCC_CONF_RFCORE_ERROR_ISR
+#else /* STARTUP_GCC_CONF_RFCORE_ERROR_ISR */
+#define RFCORE_ERROR_ISR cc2538_rf_err_isr
+#endif /* STARTUP_GCC_CONF_RFCORE_ERROR_ISR */
+
 /*---------------------------------------------------------------------------*/
 extern int main(void);
 /*---------------------------------------------------------------------------*/
@@ -60,8 +73,8 @@ void gpio_port_b_isr(void);
 void gpio_port_c_isr(void);
 void gpio_port_d_isr(void);
 void rtimer_isr(void);
-void cc2538_rf_rx_tx_isr(void);
-void cc2538_rf_err_isr(void);
+void RFCORE_RXTX_ISR(void);
+void RFCORE_ERROR_ISR(void);
 void udma_isr(void);
 void udma_err_isr(void);
 void crypto_isr(void);
@@ -267,8 +280,8 @@ void(*const vectors[])(void) =
   0,                          /* 154 */
   0,                          /* 155 */
   usb_isr,                    /* 156 USB */
-  cc2538_rf_rx_tx_isr,        /* 157 RFCORE RX/TX */
-  cc2538_rf_err_isr,          /* 158 RFCORE Error */
+  RFCORE_RXTX_ISR,            /* 157 RFCORE RX/TX */
+  RFCORE_ERROR_ISR,           /* 158 RFCORE Error */
   crypto_isr,                 /* 159 AES */
   pka_isr,                    /* 160 PKA */
   rtimer_isr,                 /* 161 SM Timer */
