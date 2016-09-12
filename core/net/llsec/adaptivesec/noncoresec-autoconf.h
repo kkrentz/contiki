@@ -75,3 +75,6 @@
 #else
 #error "unsupported security level"
 #endif
+
+#undef ADAPTIVESEC_CONF_ENABLED
+#define ADAPTIVESEC_CONF_ENABLED 1
