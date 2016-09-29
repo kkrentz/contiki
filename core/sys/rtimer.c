@@ -55,6 +55,7 @@
 #endif
 
 static struct rtimer *next_rtimer;
+static const rtimer_clock_t max_rtimer_value = -1;
 
 /*---------------------------------------------------------------------------*/
 void
@@ -93,6 +94,67 @@ rtimer_run_next(void)
   }
   next_rtimer = NULL;
   t->func(t, t->ptr);
+}
+/*---------------------------------------------------------------------------*/
+static void
+subtract_and_compare(rtimer_clock_t a, rtimer_clock_t b,
+    rtimer_clock_t *delta, int *smaller_or_equal)
+{
+  if(a == b) {
+    *delta = 0;
+    *smaller_or_equal = 1;
+  } else if(a < b) {
+    if((b - a) > (max_rtimer_value / 2)) {
+      /* we assume that a wrapped around zero */
+      *delta = a + 1 + (max_rtimer_value - b);
+      *smaller_or_equal = 0;
+    } else {
+      *delta = b - a;
+      *smaller_or_equal = 1;
+    }
+  } else {
+    if((a - b) > (max_rtimer_value / 2)) {
+      /* we assume that b wrapped around zero */
+      *delta = b + 1 + (max_rtimer_value - a);
+      *smaller_or_equal = 1;
+    } else {
+      *delta = a - b;
+      *smaller_or_equal = 0;
+    }
+  }
+}
+/*---------------------------------------------------------------------------*/
+rtimer_clock_t
+rtimer_delta(rtimer_clock_t a, rtimer_clock_t b)
+{
+  rtimer_clock_t delta;
+  int smaller_or_equal;
+
+  subtract_and_compare(a, b, &delta, &smaller_or_equal);
+  return delta;
+}
+/*---------------------------------------------------------------------------*/
+int
+rtimer_smaller_or_equal(rtimer_clock_t a, rtimer_clock_t b)
+{
+  rtimer_clock_t delta;
+  int smaller_or_equal;
+
+  subtract_and_compare(a, b, &delta, &smaller_or_equal);
+  return smaller_or_equal;
+}
+/*---------------------------------------------------------------------------*/
+int
+rtimer_has_timed_out(rtimer_clock_t timeout)
+{
+  return rtimer_smaller_or_equal(timeout, RTIMER_NOW());
+}
+/*---------------------------------------------------------------------------*/
+int
+rtimer_is_schedulable(rtimer_clock_t start_time, rtimer_clock_t guard_time)
+{
+  return !rtimer_has_timed_out(start_time)
+      && rtimer_delta(RTIMER_NOW(), start_time) >= guard_time;
 }
 /*---------------------------------------------------------------------------*/
 
