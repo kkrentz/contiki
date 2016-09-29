@@ -71,21 +71,17 @@ rtimer_arch_init(void)
 void
 rtimer_arch_schedule(rtimer_clock_t t)
 {
-  rtimer_clock_t now;
-
   /* STLOAD must be 1 */
   while((REG(SMWDTHROSC_STLOAD) & SMWDTHROSC_STLOAD_STLOAD) != 1);
 
   INTERRUPTS_DISABLE();
 
-  now = RTIMER_NOW();
-
   /*
    * New value must be 5 ticks in the future. The ST may tick once while we're
    * writing the registers. We play it safe here and we add a bit of leeway
    */
-  if((int32_t)(t - now) < RTIMER_GUARD_TIME) {
-    t = now + RTIMER_GUARD_TIME;
+  if(!rtimer_is_schedulable(t, RTIMER_GUARD_TIME)) {
+    t = RTIMER_NOW() + RTIMER_GUARD_TIME;
   }
 
   /* ST0 latches ST[1:3] and must be written last */
