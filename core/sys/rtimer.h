@@ -123,6 +123,26 @@ int rtimer_set(struct rtimer *task, rtimer_clock_t time,
 void rtimer_run_next(void);
 
 /**
+ * \return     Time between a and b
+ */
+rtimer_clock_t rtimer_delta(rtimer_clock_t a, rtimer_clock_t b);
+
+/**
+ * \return     If a is smaller or equal than b
+ */
+int rtimer_smaller_or_equal(rtimer_clock_t a, rtimer_clock_t b);
+
+/**
+ * \return     If timeout lies in the past
+ */
+int rtimer_has_timed_out(rtimer_clock_t timeout);
+
+/**
+ * \return     If start_time lies more than guard_time ticks in the future
+ */
+int rtimer_is_schedulable(rtimer_clock_t start_time, rtimer_clock_t guard_time);
+
+/**
  * \brief      Get the current clock time
  * \return     The current time
  *
