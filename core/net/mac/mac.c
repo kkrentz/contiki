@@ -65,3 +65,18 @@ mac_call_sent_callback(mac_callback_t sent, void *ptr, int status, int num_tx)
   }
 }
 /*---------------------------------------------------------------------------*/
+int
+mac_to_mac_result(int radio_result)
+{
+  switch(radio_result) {
+  case RADIO_TX_OK:
+    return MAC_TX_OK;
+  case RADIO_TX_COLLISION:
+    return MAC_TX_COLLISION;
+  case RADIO_TX_NOACK:
+    return MAC_TX_NOACK;
+  default:
+    return MAC_TX_ERR;
+  }
+}
+/*---------------------------------------------------------------------------*/
