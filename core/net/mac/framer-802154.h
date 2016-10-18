@@ -42,6 +42,9 @@
 
 #include "net/mac/framer.h"
 
+#define FRAMER_802154_MIN_BYTES_FOR_FILTERING (13)
+
+int framer_802154_filter(void);
 void framer_802154_set_seqno(void);
 
 extern const struct framer framer_802154;
