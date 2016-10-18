@@ -448,7 +448,7 @@ parse_addr(uint8_t *p, uint8_t addr_mode, uint8_t type)
 }
 /*---------------------------------------------------------------------------*/
 static int
-parse(void)
+parse(int only_until_destination_address)
 {
   uint8_t *hdrptr;
   uint8_t *p;
@@ -548,6 +548,10 @@ parse(void)
     p += addr_len;
   }
 
+  if(only_until_destination_address) {
+    return p - hdrptr;
+  }
+
   /* Source PAN ID */
   if(has_src_pid(dst_addr_mode, src_addr_mode, panid_compressed)) {
     src_pid = p[0] + (p[1] << 8);
@@ -557,7 +561,6 @@ parse(void)
   }
   packetbuf_set_attr(PACKETBUF_ATTR_SOURCE_PANID, src_pid);
 
-  /* Source address */
   if(src_addr_mode) {
     addr_len = parse_addr(p, src_addr_mode, PACKETBUF_ADDR_SENDER);
     if(!addr_len) {
@@ -617,9 +620,21 @@ parse(void)
   return p - hdrptr;
 }
 /*---------------------------------------------------------------------------*/
+int
+framer_802154_filter(void)
+{
+  return parse(1);
+}
+/*---------------------------------------------------------------------------*/
+static int
+parse_everything(void)
+{
+  return parse(0);
+}
+/*---------------------------------------------------------------------------*/
 const struct framer framer_802154 = {
   hdr_length,
   create,
-  parse
+  parse_everything
 };
 /*---------------------------------------------------------------------------*/
