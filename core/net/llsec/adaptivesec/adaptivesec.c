@@ -67,7 +67,7 @@ extern const struct framer DECORATED_FRAMER;
 #endif /* DEBUG */
 
 #if AKES_NBR_WITH_GROUP_KEYS
-uint8_t adaptivesec_group_key[AKES_NBR_KEY_LEN];
+uint8_t adaptivesec_group_key[AES_128_KEY_LENGTH];
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
 
 /*---------------------------------------------------------------------------*/
@@ -225,7 +225,7 @@ adaptivesec_aead(uint8_t *key, int shall_encrypt, uint8_t *result, int forward)
     m_len = 0;
   }
 
-  ADAPTIVESEC_SET_KEY(key);
+  CCM_STAR.set_key(key);
   CCM_STAR.aead(nonce,
       m, m_len,
       a, a_len,
@@ -289,7 +289,7 @@ init(void)
 {
   cmd_broker_init();
 #if AKES_NBR_WITH_GROUP_KEYS
-  csprng_rand(adaptivesec_group_key, AKES_NBR_KEY_LEN);
+  csprng_rand(adaptivesec_group_key, AES_128_KEY_LENGTH);
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
   akes_nbr_init();
   ADAPTIVESEC_STRATEGY.init();

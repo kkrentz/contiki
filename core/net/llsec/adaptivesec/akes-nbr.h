@@ -59,12 +59,6 @@
 #define AKES_NBR_MAX                    (NBR_TABLE_MAX_NEIGHBORS + 1)
 #endif /* AKES_NBR_CONF_MAX */
 
-#ifdef AKES_NBR_CONF_KEY_LEN
-#define AKES_NBR_KEY_LEN                AKES_NBR_CONF_KEY_LEN
-#else /* AKES_NBR_CONF_KEY_LEN */
-#define AKES_NBR_KEY_LEN                AES_128_KEY_LENGTH
-#endif /* AKES_NBR_CONF_KEY_LEN */
-
 #ifdef AKES_NBR_CONF_WITH_PAIRWISE_KEYS
 #define AKES_NBR_WITH_PAIRWISE_KEYS     AKES_NBR_CONF_WITH_PAIRWISE_KEYS
 #else /* AKES_NBR_CONF_WITH_PAIRWISE_KEYS */
@@ -115,10 +109,10 @@ struct akes_nbr {
     /* permanent */
     struct {
 #if AKES_NBR_WITH_PAIRWISE_KEYS
-      uint8_t pairwise_key[AKES_NBR_KEY_LEN];
+      uint8_t pairwise_key[AES_128_KEY_LENGTH];
 #endif /* AKES_NBR_WITH_PAIRWISE_KEYS */
 #if AKES_NBR_WITH_GROUP_KEYS
-      uint8_t group_key[AKES_NBR_KEY_LEN];
+      uint8_t group_key[AES_128_KEY_LENGTH];
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
       uint8_t sent_authentic_hello;
 #if ANTI_REPLAY_WITH_SUPPRESSION
@@ -137,7 +131,7 @@ struct akes_nbr {
         };
 
         struct {
-          uint8_t tentative_pairwise_key[AKES_NBR_KEY_LEN];
+          uint8_t tentative_pairwise_key[AES_128_KEY_LENGTH];
         };
       };
 

@@ -47,12 +47,6 @@
 #include "lib/ccm-star.h"
 #include "lib/aes-128.h"
 
-#if AKES_NBR_KEY_LEN == 16
-#define ADAPTIVESEC_SET_KEY(key)      CCM_STAR.set_key(key)
-#else /* AKES_NBR_KEY_LEN == 16 */
-#define ADAPTIVESEC_SET_KEY(key)      aes_128_set_padded_key(key, AKES_NBR_KEY_LEN)
-#endif /* AKES_NBR_KEY_LEN == 16 */
-
 #ifdef ADAPTIVESEC_CONF_UNICAST_SEC_LVL
 #define ADAPTIVESEC_UNICAST_SEC_LVL   ADAPTIVESEC_CONF_UNICAST_SEC_LVL
 #else /* ADAPTIVESEC_CONF_UNICAST_SEC_LVL */
@@ -114,7 +108,7 @@ extern const struct adaptivesec_strategy ADAPTIVESEC_STRATEGY;
 extern const struct llsec_driver adaptivesec_driver;
 extern const struct framer adaptivesec_framer;
 #if AKES_NBR_WITH_GROUP_KEYS
-extern uint8_t adaptivesec_group_key[AKES_NBR_KEY_LEN];
+extern uint8_t adaptivesec_group_key[AES_128_KEY_LENGTH];
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
 
 uint8_t adaptivesec_get_cmd_id(void);

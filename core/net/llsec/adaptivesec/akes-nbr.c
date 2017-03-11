@@ -80,7 +80,7 @@ akes_nbr_copy_challenge(uint8_t *dest, uint8_t *source)
 void
 akes_nbr_copy_key(uint8_t *dest, uint8_t *source)
 {
-  memcpy(dest, source, AKES_NBR_KEY_LEN);
+  memcpy(dest, source, AES_128_KEY_LENGTH);
 }
 /*---------------------------------------------------------------------------*/
 linkaddr_t *
@@ -249,14 +249,14 @@ akes_nbr_update(struct akes_nbr *nbr, uint8_t *data, int cmd_id)
 #endif /* AKES_NBR_WITH_INDICES */
 #if AKES_NBR_WITH_GROUP_KEYS
     PRINTF("akes-nbr: Group session key: ");
-    for(i = 0; i < AKES_NBR_KEY_LEN; i++) {
+    for(i = 0; i < AES_128_KEY_LENGTH; i++) {
       PRINTF("%x", nbr->group_key[i]);
     }
     PRINTF("\n");
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
 #if AKES_NBR_WITH_PAIRWISE_KEYS
     PRINTF("akes-nbr: Pairwise key: ");
-    for(i = 0; i < AKES_NBR_KEY_LEN; i++) {
+    for(i = 0; i < AES_128_KEY_LENGTH; i++) {
       PRINTF("%x", nbr->pairwise_key[i]);
     }
     PRINTF("\n");

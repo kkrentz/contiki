@@ -111,7 +111,7 @@ prepare_update_command(uint8_t cmd_id,
   case AKES_ACK_IDENTIFIER:
     akes_nbr_copy_key(payload, adaptivesec_group_key);
     packetbuf_set_attr(PACKETBUF_ATTR_UNENCRYPTED_BYTES, payload_len);
-    payload_len += AKES_NBR_KEY_LEN;
+    payload_len += AES_128_KEY_LENGTH;
     break;
   }
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
@@ -121,7 +121,7 @@ prepare_update_command(uint8_t cmd_id,
 static void
 generate_pairwise_key(uint8_t *result, uint8_t *shared_secret)
 {
-  ADAPTIVESEC_SET_KEY(shared_secret);
+  AES_128.set_key(shared_secret);
   AES_128.encrypt(result);
 }
 /*---------------------------------------------------------------------------*/
@@ -276,9 +276,9 @@ on_helloack(uint8_t *payload, int p_flag)
     if(entry->permanent) {
       if(
 #if AKES_NBR_WITH_PAIRWISE_KEYS
-          !memcmp(key, entry->permanent->pairwise_key, AKES_NBR_KEY_LEN)) {
+          !memcmp(key, entry->permanent->pairwise_key, AES_128_KEY_LENGTH)) {
 #else /* AKES_NBR_WITH_PAIRWISE_KEYS */
-          entry->tentative && !memcmp(key, entry->tentative->tentative_pairwise_key, AKES_NBR_KEY_LEN)) {
+          entry->tentative && !memcmp(key, entry->tentative->tentative_pairwise_key, AES_128_KEY_LENGTH)) {
 #endif /* AKES_NBR_WITH_PAIRWISE_KEYS */
 
         PRINTF("akes: Replayed HELLOACK\n");
@@ -419,7 +419,7 @@ on_command(uint8_t cmd_id, uint8_t *payload)
   case AKES_HELLOACK_P_IDENTIFIER:
   case AKES_ACK_IDENTIFIER:
     packetbuf_set_attr(PACKETBUF_ATTR_UNENCRYPTED_BYTES,
-        packetbuf_datalen() - AKES_NBR_KEY_LEN - ADAPTIVESEC_UNICAST_MIC_LEN);
+        packetbuf_datalen() - AES_128_KEY_LENGTH - ADAPTIVESEC_UNICAST_MIC_LEN);
     break;
   }
 #endif /* AKES_NBR_WITH_GROUP_KEYS && PACKETBUF_WITH_UNENCRYPTED_BYTES */
