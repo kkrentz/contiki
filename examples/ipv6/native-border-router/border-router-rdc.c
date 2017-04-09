@@ -100,43 +100,27 @@ setup_callback(mac_callback_t sent, void *ptr)
 static void
 send_packet(mac_callback_t sent, void *ptr)
 {
-  int size;
-  /* 3 bytes per packet attribute is required for serialization */
-  uint8_t buf[PACKETBUF_NUM_ATTRS * 3 + PACKETBUF_SIZE + 3];
+  int16_t size;
+  uint8_t buf[3 + PACKETUTILS_MAX_DATA_SIZE];
   uint8_t sid;
 
   packetbuf_set_addr(PACKETBUF_ADDR_SENDER, &linkaddr_node_addr);
 
-  /* ack or not ? */
-  packetbuf_set_attr(PACKETBUF_ATTR_MAC_ACK, 1);
+  /* here we send the data over SLIP to the radio-chip */
+  size = packetutils_serialize(&buf[3]);
 
-  if(NETSTACK_FRAMER.create() < 0) {
-    /* Failed to allocate space for headers */
-    PRINTF("br-rdc: send failed, too large header\n");
-    mac_call_sent_callback(sent, ptr, MAC_TX_ERR_FATAL, 1);
-
-  } else {
-    /* here we send the data over SLIP to the radio-chip */
-    size = 0;
-#if SERIALIZE_ATTRIBUTES
-    size = packetutils_serialize_atts(&buf[3], sizeof(buf) - 3);
-#endif
-    if(size < 0 || size + packetbuf_totlen() + 3 > sizeof(buf)) {
-      PRINTF("br-rdc: send failed, too large header\n");
-      mac_call_sent_callback(sent, ptr, MAC_TX_ERR_FATAL, 1);
-    } else {
-      sid = setup_callback(sent, ptr);
-
-      buf[0] = '!';
-      buf[1] = 'S';
-      buf[2] = sid; /* sequence or session number for this packet */
-
-      /* Copy packet data */
-      memcpy(&buf[3 + size], packetbuf_hdrptr(), packetbuf_totlen());
-
-      write_to_slip(buf, packetbuf_totlen() + size + 3);
-    }
+  if(size < 0) {
+    PRINTF("border-router-rdc: packetutils_serialize failed\n");
+    return;
   }
+
+  sid = setup_callback(sent, ptr);
+
+  buf[0] = '!';
+  buf[1] = 'S';
+  buf[2] = sid; /* sequence or session number for this packet */
+
+  write_to_slip(buf, 3 + size);
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -151,11 +135,7 @@ send_list(mac_callback_t sent, void *ptr, struct rdc_buf_list *buf_list)
 static void
 packet_input(void)
 {
-  if(NETSTACK_FRAMER.parse() < 0) {
-    PRINTF("br-rdc: failed to parse %u\n", packetbuf_datalen());
-  } else {
-    NETSTACK_MAC.input();
-  }
+  NETSTACK_MAC.input();
 }
 /*---------------------------------------------------------------------------*/
 static int

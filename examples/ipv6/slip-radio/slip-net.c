@@ -32,6 +32,7 @@
 #include "net/ip/uip.h"
 #include "net/packetbuf.h"
 #include "dev/slip.h"
+#include "packetutils.h"
 #include <stdio.h>
 
 #define SLIP_END     0300
@@ -71,28 +72,15 @@ slip_send_packet(const uint8_t *ptr, int len)
 void
 slipnet_input(void)
 {
-  int i;
-  /* radio should be configured for filtering so this should be simple */
-  /* this should be sent over SLIP! */
-  /* so just copy into uip-but and send!!! */
-  /* Format: !R<data> ? */
-  uip_len = packetbuf_datalen();
-  i = packetbuf_copyto(uip_buf);
+  uint8_t buf[PACKETUTILS_MAX_DATA_SIZE];
+  int16_t size;
 
-  if(DEBUG) {
-    printf("Slipnet got input of len: %d, copied: %d\n",
-	   packetbuf_datalen(), i);
-
-    for(i = 0; i < uip_len; i++) {
-      printf("%02x", (unsigned char) uip_buf[i]);
-      if((i & 15) == 15) printf("\n");
-      else if((i & 7) == 7) printf(" ");
-    }
-    printf("\n");
+  size = packetutils_serialize(buf);
+  if(size < 0) {
+    return;
   }
 
-  /* printf("SUT: %u\n", uip_len); */
-  slip_send_packet(uip_buf, uip_len);
+  slip_send_packet(buf, size);
 }
 /*---------------------------------------------------------------------------*/
 const struct network_driver slipnet_driver = {

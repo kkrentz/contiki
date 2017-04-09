@@ -28,63 +28,89 @@
  */
 
 #include "contiki.h"
-#include "net/packetbuf.h"
+#include "packetutils.h"
 #define DEBUG DEBUG_NONE
 #include "net/ip/uip-debug.h"
 
 /*---------------------------------------------------------------------------*/
-int
-packetutils_serialize_atts(uint8_t *data, int size)
+int16_t
+packetutils_serialize(uint8_t *dst)
 {
-  int i;
-  /* set the length first later */
-  int pos = 1;
-  int cnt = 0;
-  /* assume that values are 16-bit */
-  uint16_t val;
-  PRINTF("packetutils: serializing packet atts");
+  int16_t pos;
+  uint16_t attribute_count;
+  uint16_t attribute_count_pos;
+  uint16_t i;
+  uint16_t attr;
+  const linkaddr_t *addr;
+
+  /* serialize hdrlen, totlen, and data */
+  packetbuf_compact();
+  dst[0] = packetbuf_hdrlen();
+  dst[1] = packetbuf_copyto(dst + 2);
+  if(!dst[1]) {
+    PRINTF("packetutils: packetbuf_copyto failed\n");
+    return -1;
+  }
+  pos = 2 + dst[1];
+
+  /* reserve space for attribute count */
+  attribute_count_pos = pos++;
+
+  /* serialize non-zero packetbuf attributes */
+  attribute_count = 0;
   for(i = 0; i < PACKETBUF_NUM_ATTRS; i++) {
-    val = packetbuf_attr(i);
-    if(val != 0) {
-      if(pos + 3 > size) {
-        return -1;
-      }
-      data[pos++] = i;
-      data[pos++] = val >> 8;
-      data[pos++] = val & 255;
-      cnt++;
-      PRINTF(" %d=%d", i, val);
+    attr = packetbuf_attr(i);
+    if(attr != 0) {
+      dst[pos++] = i;
+      dst[pos++] = attr >> 8;
+      dst[pos++] = attr & 255;
+      attribute_count++;
     }
   }
-  PRINTF(" (%d)\n", cnt);
+  dst[attribute_count_pos] = attribute_count;
 
-  data[0] = cnt;
+  /* serialize addresses */
+  for(i = PACKETBUF_NUM_ATTRS; i < PACKETBUF_ATTR_MAX; i++) {
+    addr = packetbuf_addr(i);
+    memcpy(dst + pos, addr->u8, LINKADDR_SIZE);
+    pos += LINKADDR_SIZE;
+  }
+
   return pos;
 }
 /*---------------------------------------------------------------------------*/
-int
-packetutils_deserialize_atts(const uint8_t *data, int size)
+int16_t
+packetutils_deserialize(const uint8_t *src)
 {
-  int i, cnt, pos;
+  int16_t pos;
+  uint16_t attribute_count;
+  uint16_t i;
+  linkaddr_t addr;
 
-  pos = 0;
-  cnt = data[pos++];
-  PRINTF("packetutils: deserializing %d packet atts:", cnt);
-  if(cnt > PACKETBUF_NUM_ATTRS) {
-    PRINTF(" *** too many: %u!\n", PACKETBUF_NUM_ATTRS);
-    return -1;
-  }
-  for(i = 0; i < cnt; i++) {
-    if(data[pos] >= PACKETBUF_NUM_ATTRS) {
-      /* illegal attribute identifier */
-      PRINTF(" *** unknown attribute %u\n", data[pos]);
+  /* deserialize hdrlen, totlen, and data */
+  packetbuf_copyfrom(src + 2, src[1]);
+  packetbuf_hdrreduce(src[0]);
+  pos = 2 + src[1];
+
+  /* deserialize attribute count */
+  attribute_count = src[pos++];
+
+  for(i = 0; i < attribute_count; i++) {
+    if(src[pos] >= PACKETBUF_NUM_ATTRS) {
+      PRINTF("packetutils: illegal attribute %u\n", src[pos]);
       return -1;
     }
-    PRINTF(" %d=%d", data[pos], (data[pos + 1] << 8) | data[pos + 2]);
-    packetbuf_set_attr(data[pos], (data[pos + 1] << 8) | data[pos + 2]);
+    packetbuf_set_attr(src[pos], (src[pos + 1] << 8) | src[pos + 2]);
     pos += 3;
   }
-  PRINTF("\n");
+
+  /* deserialize addresses */
+  for(i = PACKETBUF_NUM_ATTRS; i < PACKETBUF_ATTR_MAX; i++) {
+    memcpy(addr.u8, src + pos, LINKADDR_SIZE);
+    packetbuf_set_addr(i, &addr);
+    pos += LINKADDR_SIZE;
+  }
+
   return pos;
 }
 /*---------------------------------------------------------------------------*/

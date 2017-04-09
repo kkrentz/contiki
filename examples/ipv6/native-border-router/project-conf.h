@@ -47,8 +47,6 @@
 #undef WEBSERVER_CONF_CFS_CONNS
 #define WEBSERVER_CONF_CFS_CONNS 2
 
-#define SERIALIZE_ATTRIBUTES 1
-
 #define CMD_CONF_OUTPUT border_router_cmd_output
 
 #undef NETSTACK_CONF_RDC
@@ -56,5 +54,8 @@
 
 /* used by wpcap (see /cpu/native/net/wpcap-drv.c) */
 #define SELECT_CALLBACK 1
+
+#undef NETSTACK_CONF_MAC
+#define NETSTACK_CONF_MAC     nullmac_driver
 
 #endif /* PROJECT_ROUTER_CONF_H_ */

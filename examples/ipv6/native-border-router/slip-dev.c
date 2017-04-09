@@ -50,7 +50,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <err.h>
-
+#include "packetutils.h"
 #include "net/netstack.h"
 #include "net/packetbuf.h"
 #include "cmd.h"
@@ -162,9 +162,13 @@ is_sensible_string(const unsigned char *s, int len)
 void
 slip_packet_input(unsigned char *data, int len)
 {
-  packetbuf_copyfrom(data, len);
+  if(packetutils_deserialize(data) < 0) {
+    printf("slip-dev: packetutils_deserialize failed\n");
+    return;
+  }
+
   if(slip_config_verbose > 0) {
-    printf("Packet input over SLIP: %d\n", len);
+    printf("Packet input over SLIP: %d\n", packetbuf_totlen());
   }
   NETSTACK_RDC.input();
 }

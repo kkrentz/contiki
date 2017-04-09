@@ -103,28 +103,18 @@ slip_radio_cmd_handler(const uint8_t *data, int len)
     /* should send out stuff to the radio - ignore it as IP */
     /* --- s e n d --- */
     if(data[1] == 'S') {
-      int pos;
+      int16_t pos;
       packet_ids[packet_pos] = data[2];
 
-      packetbuf_clear();
-      pos = packetutils_deserialize_atts(&data[3], len - 3);
+      pos = packetutils_deserialize(&data[3]);
       if(pos < 0) {
         PRINTF("slip-radio: illegal packet attributes\n");
         return 1;
       }
-      pos += 3;
-      len -= pos;
-      if(len > PACKETBUF_SIZE) {
-        len = PACKETBUF_SIZE;
-      }
-      memcpy(packetbuf_dataptr(), &data[pos], len);
-      packetbuf_set_datalen(len);
 
       PRINTF("slip-radio: sending %u (%d bytes)\n",
              data[2], packetbuf_datalen());
 
-      /* parse frame before sending to get addresses, etc. */
-      no_framer.parse();
       NETSTACK_LLSEC.send(packet_sent, &packet_ids[packet_pos]);
 
       packet_pos++;

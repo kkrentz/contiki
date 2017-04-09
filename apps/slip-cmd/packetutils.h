@@ -30,8 +30,15 @@
 #ifndef PACKETUTILS_H_
 #define PACKETUTILS_H_
 
-int packetutils_serialize_atts(uint8_t *data, int size);
+#include "net/packetbuf.h"
 
-int packetutils_deserialize_atts(const uint8_t *data, int size);
+#define PACKETUTILS_MAX_DATA_SIZE (2 /* hdrlen and totlen */ \
+    + PACKETBUF_SIZE /* packetbuf data */ \
+    + 1 /* attribute count */ \
+    + (PACKETBUF_NUM_ATTRS * 3) /* attributes */ \
+    + (PACKETBUF_NUM_ADDRS * LINKADDR_SIZE)) /* addresses */ \
+
+int16_t packetutils_serialize(uint8_t *dst);
+int16_t packetutils_deserialize(const uint8_t *src);
 
 #endif /* PACKETUTILS_H_ */
