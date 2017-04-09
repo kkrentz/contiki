@@ -4,6 +4,8 @@ APPS = slip-cmd
 
 CONTIKI=../../..
 
+MODULES += core/net/llsec/adaptivesec
+
 #linker optimizations
 SMALL=1
 

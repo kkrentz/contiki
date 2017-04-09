@@ -49,6 +49,25 @@
 
 #define CMD_CONF_OUTPUT border_router_cmd_output
 
+/* configure FRAMERs (just because sicslowpan.c calls NETSTACK_FRAMER.length) */
+#if 1
+#undef ADAPTIVESEC_CONF_UNICAST_SEC_LVL
+#define ADAPTIVESEC_CONF_UNICAST_SEC_LVL 2
+#undef ADAPTIVESEC_CONF_BROADCAST_SEC_LVL
+#define ADAPTIVESEC_CONF_BROADCAST_SEC_LVL 2
+#undef LLSEC802154_CONF_USES_AUX_HEADER
+#define LLSEC802154_CONF_USES_AUX_HEADER 0
+#undef NBR_TABLE_CONF_MAX_NEIGHBORS
+#define NBR_TABLE_CONF_MAX_NEIGHBORS 14
+#if 0
+#include "net/llsec/adaptivesec/coresec-autoconf.h"
+#else
+#include "net/llsec/adaptivesec/noncoresec-autoconf.h"
+#endif
+#undef NETSTACK_CONF_LLSEC
+#define NETSTACK_CONF_LLSEC nullsec_driver
+#endif
+
 #undef NETSTACK_CONF_RDC
 #define NETSTACK_CONF_RDC border_router_rdc_driver
 

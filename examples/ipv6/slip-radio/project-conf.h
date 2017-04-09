@@ -61,13 +61,34 @@
 
 #undef NETSTACK_CONF_RDC
 /* #define NETSTACK_CONF_RDC     nullrdc_noframer_driver */
-#define NETSTACK_CONF_RDC     contikimac_driver
+#define NETSTACK_CONF_RDC     nullrdc_driver
 
 #undef NETSTACK_CONF_NETWORK
 #define NETSTACK_CONF_NETWORK slipnet_driver
 
 #undef NETSTACK_CONF_FRAMER
 #define NETSTACK_CONF_FRAMER framer_802154
+
+/* configure LLSEC layer */
+#if 1
+#undef ADAPTIVESEC_CONF_UNICAST_SEC_LVL
+#define ADAPTIVESEC_CONF_UNICAST_SEC_LVL 2
+#undef ADAPTIVESEC_CONF_BROADCAST_SEC_LVL
+#define ADAPTIVESEC_CONF_BROADCAST_SEC_LVL 2
+#undef LLSEC802154_CONF_USES_AUX_HEADER
+#define LLSEC802154_CONF_USES_AUX_HEADER 0
+#undef NBR_TABLE_CONF_MAX_NEIGHBORS
+#define NBR_TABLE_CONF_MAX_NEIGHBORS 14
+#if 0
+#include "net/llsec/adaptivesec/coresec-autoconf.h"
+#else
+#include "net/llsec/adaptivesec/noncoresec-autoconf.h"
+#endif
+#endif
+
+/* set a seeder */
+#undef CSPRNG_CONF_SEEDER
+#define CSPRNG_CONF_SEEDER iq_seeder
 
 #undef CC2420_CONF_AUTOACK
 #define CC2420_CONF_AUTOACK              1
