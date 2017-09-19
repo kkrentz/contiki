@@ -96,6 +96,8 @@ res_post_put_handler(void *request, void *response, uint8_t *buffer, uint16_t pr
       leds_on(led);
     } else if(strncmp(mode, "off", len) == 0) {
       leds_off(led);
+    } else if(strncmp(mode, "toggle", len) == 0) {
+      leds_toggle(led);
     } else {
       success = 0;
     }
