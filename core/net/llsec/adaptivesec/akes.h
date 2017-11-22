@@ -42,6 +42,8 @@
 
 #include "net/llsec/adaptivesec/adaptivesec.h"
 #include "net/llsec/adaptivesec/akes-nbr.h"
+#include "net/mac/csl/csl.h"
+#include "net/mac/csl/csl-framer.h"
 
 #ifdef AKES_CONF_MAX_WAITING_PERIOD
 #define AKES_MAX_WAITING_PERIOD AKES_CONF_MAX_WAITING_PERIOD
@@ -69,6 +71,18 @@
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
 
 #define AKES_UPDATES_SEC_LVL (ADAPTIVESEC_UNICAST_SEC_LVL & 3)
+#define AKES_HELLO_DATALEN (1 /* command frame identifier */ \
+    + AKES_NBR_CHALLENGE_LEN /* challenge */ \
+    + CSL_FRAMER_HELLO_PIGGYBACK_LEN)
+#define AKES_HELLOACK_DATALEN (1 /* command frame identifier */ \
+    + AKES_NBR_CHALLENGE_LEN /* challenge */ \
+    + CSL_FRAMER_HELLOACK_PIGGYBACK_LEN \
+    + 1 /* local index */ \
+    + ADAPTIVESEC_UNICAST_MIC_LEN)
+#define AKES_ACK_DATALEN (1 /* command frame identifier */ \
+    + CSL_FRAMER_ACK_PIGGYBACK_LEN \
+    + 1 /* local index */ \
+    + ADAPTIVESEC_UNICAST_MIC_LEN)
 
 /* Command frame identifiers */
 enum {
@@ -77,7 +91,9 @@ enum {
   AKES_HELLOACK_P_IDENTIFIER = 0x1B,
   AKES_ACK_IDENTIFIER = 0x0C,
   AKES_UPDATE_IDENTIFIER = 0x0E,
+#if !CSL_ENABLED
   AKES_UPDATEACK_IDENTIFIER = 0x0F
+#endif /* !CSL_ENABLED */
 };
 
 /**
@@ -104,6 +120,9 @@ struct akes_scheme {
 extern const struct akes_scheme AKES_SCHEME;
 
 void akes_broadcast_hello(void);
+int akes_is_acceptable_hello(void);
+void akes_create_hello(void);
+int akes_create_helloack(void);
 int akes_is_acceptable_helloack(void);
 int akes_is_acceptable_ack(struct akes_nbr_entry *entry);
 void akes_init(void);
