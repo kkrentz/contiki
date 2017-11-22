@@ -41,6 +41,8 @@
 #include "net/llsec/adaptivesec/akes-trickle.h"
 #include "net/llsec/adaptivesec/akes.h"
 #include "net/llsec/ccm-star-packetbuf.h"
+#include "net/mac/csl/csl-ccm-inputs.h"
+#include "net/mac/csl/csl-framer.h"
 #include "net/cmd-broker.h"
 #include "net/netstack.h"
 #include "net/packetbuf.h"
@@ -155,7 +157,9 @@ adaptivesec_get_sec_lvl(void)
     case AKES_ACK_IDENTIFIER:
       return AKES_ACKS_SEC_LVL;
     case AKES_UPDATE_IDENTIFIER:
+#if !CSL_ENABLED
     case AKES_UPDATEACK_IDENTIFIER:
+#endif /* !CSL_ENABLED */
       return AKES_UPDATES_SEC_LVL;
     }
     break;
@@ -168,6 +172,7 @@ adaptivesec_get_sec_lvl(void)
   return 0;
 }
 /*---------------------------------------------------------------------------*/
+#if !CSL_ENABLED
 void
 adaptivesec_add_security_header(struct akes_nbr *receiver)
 {
@@ -178,6 +183,7 @@ adaptivesec_add_security_header(struct akes_nbr *receiver)
   packetbuf_set_attr(PACKETBUF_ATTR_SECURITY_LEVEL, adaptivesec_get_sec_lvl());
 #endif /* !ANTI_REPLAY_WITH_SUPPRESSION */
 }
+#endif /* !CSL_ENABLED */
 /*---------------------------------------------------------------------------*/
 uint8_t *
 adaptivesec_prepare_command(uint8_t cmd_id, const linkaddr_t *dest)
@@ -225,10 +231,15 @@ send(mac_callback_t sent, void *ptr)
 #if ANTI_REPLAY_WITH_SUPPRESSION
     packetbuf_set_attr(PACKETBUF_ATTR_NEIGHBOR_INDEX, akes_nbr_index_of(entry->permanent));
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
+#if CSL_ENABLED
+    csl_framer_set_seqno(receiver);
+#endif /* CSL_ENABLED */
   }
 
+#if !CSL_ENABLED
   adaptivesec_add_security_header(receiver);
   anti_replay_suppress_counter();
+#endif /* !CSL_ENABLED */
 
   ADAPTIVESEC_STRATEGY.send(sent, ptr);
 }
@@ -237,6 +248,15 @@ static int
 create(void)
 {
   int result;
+
+  if(adaptivesec_is_hello()) {
+    akes_create_hello();
+  } else if(adaptivesec_is_helloack()) {
+    if(!akes_create_helloack()) {
+      PRINTF("adaptivesec: HELLOACK creation failed\n");
+      return FRAMER_FAILED;
+    }
+  }
 
   result = DECORATED_FRAMER.create();
   if(result == FRAMER_FAILED) {
@@ -271,7 +291,11 @@ adaptivesec_aead(uint8_t *key, int shall_encrypt, uint8_t *result, int forward)
   uint8_t *a;
   uint8_t a_len;
 
+#if CSL_ENABLED
+  csl_ccm_inputs_generate_nonce(nonce, forward);
+#else /* CSL_ENABLED */
   ccm_star_packetbuf_set_nonce(nonce, forward);
+#endif /* CSL_ENABLED */
   a = packetbuf_hdrptr();
   if(shall_encrypt) {
 #if AKES_NBR_WITH_GROUP_KEYS && PACKETBUF_WITH_UNENCRYPTED_BYTES
@@ -332,11 +356,20 @@ input(void)
     anti_replay_restore_counter(&entry->permanent->anti_replay_info);
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
 
+#if !CSL_ENABLED
     if(ADAPTIVESEC_STRATEGY.verify(entry->permanent) != ADAPTIVESEC_VERIFY_SUCCESS) {
       return;
     }
+#endif /* !CSL_ENABLED */
 
+#if CSL_ENABLED
+    if(csl_framer_received_duplicate()) {
+      PRINTF("adaptivesec: Duplicate\n");
+      return;
+    }
+#else /* CSL_ENABLED */
     akes_nbr_prolong(entry->permanent);
+#endif /* CSL_ENABLED */
 
     NETSTACK_NETWORK.input();
     break;
@@ -358,9 +391,9 @@ static int
 length(void)
 {
   return DECORATED_FRAMER.length()
-#if !ANTI_REPLAY_WITH_SUPPRESSION
+#if !ANTI_REPLAY_WITH_SUPPRESSION && !CSL_ENABLED
       + 5
-#endif /* !ANTI_REPLAY_WITH_SUPPRESSION */
+#endif /* !ANTI_REPLAY_WITH_SUPPRESSION && !CSL_ENABLED */
       + ADAPTIVESEC_STRATEGY.get_overhead();
 }
 /*---------------------------------------------------------------------------*/

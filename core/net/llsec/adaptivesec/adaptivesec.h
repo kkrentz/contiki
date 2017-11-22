@@ -44,6 +44,7 @@
 #include "net/llsec/llsec802154.h"
 #include "net/llsec/llsec.h"
 #include "net/llsec/adaptivesec/akes-nbr.h"
+#include "net/mac/csl/csl.h"
 #include "lib/ccm-star.h"
 #include "lib/aes-128.h"
 
@@ -86,7 +87,9 @@
 enum adaptivesec_verify {
   ADAPTIVESEC_VERIFY_SUCCESS,
   ADAPTIVESEC_VERIFY_INAUTHENTIC,
+#if !CSL_ENABLED
   ADAPTIVESEC_VERIFY_REPLAYED
+#endif /* !CSL_ENABLED */
 };
 
 /**
@@ -123,7 +126,9 @@ int adaptivesec_is_hello(void);
 int adaptivesec_is_helloack(void);
 int adaptivesec_is_ack(void);
 uint8_t adaptivesec_get_sec_lvl(void);
+#if !CSL_ENABLED
 void adaptivesec_add_security_header(struct akes_nbr *receiver);
+#endif /* !CSL_ENABLED */
 uint8_t *adaptivesec_prepare_command(uint8_t cmd_id, const linkaddr_t *dest);
 void adaptivesec_send_command_frame(void);
 uint8_t adaptivesec_mic_len(void);

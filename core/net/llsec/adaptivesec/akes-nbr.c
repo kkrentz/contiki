@@ -70,6 +70,30 @@ akes_nbr_index_of(struct akes_nbr *nbr)
   return nbr - (struct akes_nbr *)nbrs_memb.mem;
 }
 /*---------------------------------------------------------------------------*/
+struct akes_nbr *
+akes_nbr_get_nbr(uint8_t index)
+{
+  if(index >= AKES_NBR_MAX) {
+    return NULL;
+  }
+  return &((struct akes_nbr *)nbrs_memb.mem)[index];
+}
+/*---------------------------------------------------------------------------*/
+struct akes_nbr_entry *
+akes_nbr_get_entry_of(struct akes_nbr *nbr)
+{
+  struct akes_nbr_entry *next;
+
+  next = akes_nbr_head();
+  while(next) {
+    if((next->tentative == nbr) || (next->permanent == nbr)) {
+      return next;
+    }
+    next = akes_nbr_next(next);
+  }
+  return NULL;
+}
+/*---------------------------------------------------------------------------*/
 void
 akes_nbr_free_tentative_metadata(struct akes_nbr *nbr)
 {
@@ -170,7 +194,9 @@ akes_nbr_new(enum akes_nbr_status status)
     return NULL;
   }
   nbr_table_lock(entries_table, entry);
+#if !CSL_ENABLED
   anti_replay_init_info(&entry->refs[status]->anti_replay_info);
+#endif /* !CSL_ENABLED */
   if(status) {
     entry->refs[status]->meta = memb_alloc(&tentatives_memb);
     if(!entry->refs[status]->meta) {
@@ -183,6 +209,7 @@ akes_nbr_new(enum akes_nbr_status status)
   return entry;
 }
 /*---------------------------------------------------------------------------*/
+#if !CSL_ENABLED
 void
 akes_nbr_do_prolong(struct akes_nbr *nbr, uint16_t seconds)
 {
@@ -207,6 +234,7 @@ akes_nbr_prolong(struct akes_nbr *nbr)
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
   akes_nbr_do_prolong(nbr, LIFETIME);
 }
+#endif /* !CSL_ENABLED */
 /*---------------------------------------------------------------------------*/
 struct akes_nbr_entry *
 akes_nbr_get_entry(const linkaddr_t *addr)
@@ -242,7 +270,18 @@ akes_nbr_delete(struct akes_nbr_entry *entry, enum akes_nbr_status status)
 int
 akes_nbr_is_expired(struct akes_nbr_entry *entry, enum akes_nbr_status status)
 {
+#if CSL_ENABLED
+  rtimer_clock_t delta;
+
+  delta = rtimer_delta(entry->refs[status]->sync_data.t, RTIMER_NOW());
+  return delta > (RTIMER_ARCH_SECOND * (status
+      ? (AKES_MAX_WAITING_PERIOD + 1 /* leeway */)
+      : (entry->permanent->drift != AKES_NBR_UNINITIALIZED_DRIFT
+          ? CSL_SUBSEQUENT_UPDATE_THRESHOLD
+          : CSL_INITIAL_UPDATE_THRESHOLD)));
+#else /* CSL_ENABLED */
   return entry->refs[status]->expiration_time < clock_seconds();
+#endif /* CSL_ENABLED */
 }
 /*---------------------------------------------------------------------------*/
 void

@@ -48,6 +48,8 @@
 #include "lib/csprng.h"
 #include "lib/memb.h"
 #include "lib/leaky-bucket.h"
+#include "net/mac/csl/csl.h"
+#include "net/mac/csl/csl-framer.h"
 #include <string.h>
 
 #ifdef AKES_CONF_MAX_RETRANSMISSIONS_OF_HELLOACKS_AND_ACKS
@@ -100,7 +102,11 @@
 
 #define MAX_HELLOACK_DELAY ((AKES_MAX_WAITING_PERIOD * CLOCK_SECOND) \
     - (MAX_RETRANSMISSION_BACK_OFF * CLOCK_SECOND))
+#if CSL_ENABLED
+#define MIN_HELLOACK_DELAY (0)
+#else /* CSL_ENABLED */
 #define MIN_HELLOACK_DELAY (CLOCK_SECOND / NETSTACK_RDC_CHANNEL_CHECK_RATE)
+#endif /* CSL_ENABLED */
 
 #define DEBUG 0
 #if DEBUG
@@ -114,7 +120,9 @@ static void on_hello_sent(void *ptr, int status, int transmissions);
 static void on_hello_done(void *ptr);
 static void send_helloack(void *ptr);
 static void send_ack(struct akes_nbr_entry *entry, int is_new);
+#if !CSL_ENABLED
 static void send_updateack(struct akes_nbr_entry *entry);
+#endif /* !CSL_ENABLED */
 static void on_ack_sent(void *ptr, int status, int transmissions);
 
 /* A random challenge, which will be attached to HELLO commands */
@@ -125,6 +133,10 @@ static struct cmd_broker_subscription subscription;
 static struct leaky_bucket hello_bucket;
 static struct leaky_bucket helloack_bucket;
 static struct leaky_bucket ack_bucket;
+#if CSL_ENABLED
+static uint8_t q[AKES_NBR_CHALLENGE_LEN];
+static rtimer_clock_t phi_2;
+#endif /* CSL_ENABLED */
 
 /*---------------------------------------------------------------------------*/
 static void
@@ -136,6 +148,11 @@ prepare_update_command(uint8_t cmd_id,
   uint8_t payload_len;
 
   payload = adaptivesec_prepare_command(cmd_id, akes_nbr_get_addr(entry));
+#if CSL_ENABLED
+  if(cmd_id == AKES_UPDATE_IDENTIFIER) {
+    csl_framer_set_seqno(entry->permanent);
+  }
+#else /* CSL_ENABLED */
   adaptivesec_add_security_header(entry->refs[status]);
   anti_replay_suppress_counter();
   if(status) {
@@ -143,6 +160,7 @@ prepare_update_command(uint8_t cmd_id,
     packetbuf_set_attr(PACKETBUF_ATTR_MAC_SEQNO,
         0xff00 + packetbuf_attr(PACKETBUF_ATTR_MAC_SEQNO));
   }
+#endif /* CSL_ENABLED */
 #if ANTI_REPLAY_WITH_SUPPRESSION
   packetbuf_set_attr(PACKETBUF_ATTR_NEIGHBOR_INDEX, akes_nbr_index_of(entry->refs[status]));
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
@@ -162,7 +180,17 @@ prepare_update_command(uint8_t cmd_id,
   if(status) {
     akes_nbr_copy_challenge(payload, entry->tentative->challenge);
     payload += AKES_NBR_CHALLENGE_LEN;
+    payload += CSL_FRAMER_HELLOACK_PIGGYBACK_LEN;
   }
+
+#if CSL_ENABLED
+  if(cmd_id == AKES_ACK_IDENTIFIER) {
+    csl_framer_write_phase(payload, phi_2);
+    payload += CSL_FRAMER_PHASE_LEN;
+    akes_nbr_copy_challenge(payload, q);
+    payload += AKES_NBR_CHALLENGE_LEN;
+  }
+#endif /* CSL_ENABLED */
 
 #if AKES_NBR_WITH_INDICES
   payload[0] = akes_nbr_index_of(entry->refs[status]);
@@ -200,19 +228,40 @@ process_update_command(struct akes_nbr *nbr, uint8_t *data, int cmd_id)
 {
   switch(cmd_id) {
   case AKES_ACK_IDENTIFIER:
+#if CSL_ENABLED
+    nbr->sync_data.his_wake_up_counter_at_t = nbr->meta->predicted_wake_up_counter;
+    nbr->sync_data.t = nbr->meta->helloack_sfd_timestamp
+        - (WAKE_UP_COUNTER_INTERVAL - csl_framer_parse_phase(data));
+    data += CSL_FRAMER_ACK_PIGGYBACK_LEN;
+    nbr->drift = AKES_NBR_UNINITIALIZED_DRIFT;
+    nbr->historical_sync_data = nbr->sync_data;
+#endif /* CSL_ENABLED */
     akes_nbr_free_tentative_metadata(nbr);
     nbr->sent_authentic_hello = 1;
     break;
   case AKES_HELLOACK_IDENTIFIER:
+#if CSL_ENABLED
+    nbr->sync_data.t = csl_get_last_sfd_timestamp()
+        - (WAKE_UP_COUNTER_INTERVAL - csl_framer_parse_phase(data));
+    data += CSL_FRAMER_PHASE_LEN;
+    nbr->sync_data.his_wake_up_counter_at_t = wake_up_counter_parse(data);
+    data +=  WAKE_UP_COUNTER_LEN;
+    akes_nbr_copy_challenge(q, data);
+    data += AKES_NBR_CHALLENGE_LEN;
+    phi_2 = csl_get_phase(csl_get_last_sfd_timestamp());
+    nbr->drift = AKES_NBR_UNINITIALIZED_DRIFT;
+#endif /* CSL_ENABLED */
     nbr->sent_authentic_hello = 0;
     break;
   }
 
+#if !CSL_ENABLED
   anti_replay_was_replayed(&nbr->anti_replay_info);
 #if ANTI_REPLAY_WITH_SUPPRESSION
   nbr->last_was_broadcast = 1;
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
   akes_nbr_prolong(nbr);
+#endif /* !CSL_ENABLED */
 
 #if AKES_NBR_WITH_INDICES
   nbr->foreign_index = data[0];
@@ -277,18 +326,31 @@ akes_broadcast_hello(void)
   leaky_bucket_pour(&hello_bucket);
 
   payload = adaptivesec_prepare_command(AKES_HELLO_IDENTIFIER, &linkaddr_null);
+#if !CSL_ENABLED
   adaptivesec_add_security_header(NULL);
   anti_replay_suppress_counter();
+#endif /* !CSL_ENABLED */
 
   /* write payload */
   akes_nbr_copy_challenge(payload, hello_challenge);
   payload += AKES_NBR_CHALLENGE_LEN;
 
-  packetbuf_set_datalen(1        /* command frame identifier */
-      + AKES_NBR_CHALLENGE_LEN); /* challenge */
+  packetbuf_set_datalen(AKES_HELLO_DATALEN);
 
   PRINTF("akes: broadcasting HELLO\n");
   ADAPTIVESEC_STRATEGY.send(on_hello_sent, NULL);
+}
+/*---------------------------------------------------------------------------*/
+void
+akes_create_hello(void)
+{
+#if CSL_ENABLED
+  uint8_t *dataptr;
+
+  dataptr = packetbuf_dataptr();
+  wake_up_counter_write(dataptr + 1 + AKES_NBR_CHALLENGE_LEN,
+      csl_get_wake_up_counter(csl_get_payload_frames_shr_end()));
+#endif /* CSL_ENABLED */
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -308,6 +370,21 @@ on_hello_done(void *ptr)
   change_hello_challenge();
 }
 /*---------------------------------------------------------------------------*/
+int
+akes_is_acceptable_hello(void)
+{
+  struct akes_nbr_entry *entry;
+
+  akes_nbr_delete_expired_tentatives();
+  entry = akes_nbr_get_receiver_entry();
+
+  return (entry && entry->permanent)
+      || (!(entry && entry->tentative)
+      && !leaky_bucket_is_full(&helloack_bucket)
+      && (akes_nbr_count(AKES_NBR_TENTATIVE) < AKES_NBR_MAX_TENTATIVES)
+      && akes_nbr_free_slots());
+}
+/*---------------------------------------------------------------------------*/
 static enum cmd_broker_result
 on_hello(uint8_t *payload)
 {
@@ -325,15 +402,21 @@ on_hello(uint8_t *payload)
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
     switch(ADAPTIVESEC_STRATEGY.verify(entry->permanent)) {
     case ADAPTIVESEC_VERIFY_SUCCESS:
+#if CSL_ENABLED
+      leaky_bucket_effuse(&csl_hello_inc_bucket);
+#else /* CSL_ENABLED */
       akes_nbr_prolong(entry->permanent);
+#endif /* CSL_ENABLED */
       akes_trickle_on_fresh_authentic_hello(entry->permanent);
       return CMD_BROKER_CONSUMED;
     case ADAPTIVESEC_VERIFY_INAUTHENTIC:
       PRINTF("akes: Starting new session with permanent neighbor\n");
       break;
+#if !CSL_ENABLED
     case ADAPTIVESEC_VERIFY_REPLAYED:
       PRINTF("akes: Replayed HELLO\n");
       return CMD_BROKER_ERROR;
+#endif /* !CSL_ENABLED */
     }
   }
 
@@ -358,9 +441,16 @@ on_hello(uint8_t *payload)
 
   akes_nbr_copy_challenge(entry->tentative->challenge, payload);
   waiting_period = adaptivesec_random_clock_time(MIN_HELLOACK_DELAY, MAX_HELLOACK_DELAY);
+#if CSL_ENABLED
+  entry->tentative->sync_data.t = csl_get_last_sfd_timestamp()
+      - (WAKE_UP_COUNTER_INTERVAL / 2);
+  entry->tentative->sync_data.his_wake_up_counter_at_t =
+      wake_up_counter_parse(payload + AKES_NBR_CHALLENGE_LEN);
+#else /* CSL_ENABLED */
   entry->tentative->expiration_time = clock_seconds()
       + (waiting_period / CLOCK_SECOND)
       + AKES_ACK_DELAY;
+#endif /* CSL_ENABLED */
   ctimer_set(&entry->tentative->meta->wait_timer,
       waiting_period,
       send_helloack,
@@ -401,6 +491,36 @@ send_helloack(void *ptr)
   akes_nbr_copy_key(entry->tentative->tentative_pairwise_key, challenges);
 
   adaptivesec_send_command_frame();
+}
+/*---------------------------------------------------------------------------*/
+int
+akes_create_helloack(void)
+{
+#if CSL_ENABLED
+  struct akes_nbr_entry *entry;
+  struct akes_nbr *nbr;
+  uint8_t *dataptr;
+
+  entry = akes_nbr_get_receiver_entry();
+  if(!entry || !((nbr = entry->tentative))) {
+    return 0;
+  }
+
+  dataptr = packetbuf_dataptr();
+  entry->tentative->meta->helloack_sfd_timestamp = csl_get_payload_frames_shr_end();
+  csprng_rand(nbr->meta->q, AKES_NBR_CHALLENGE_LEN);
+  nbr->meta->predicted_wake_up_counter = csl_predict_wake_up_counter();
+
+  dataptr += 1 + AKES_NBR_CHALLENGE_LEN;
+  csl_framer_write_phase(dataptr,
+      csl_get_phase(entry->tentative->meta->helloack_sfd_timestamp));
+  dataptr += CSL_FRAMER_PHASE_LEN;
+  wake_up_counter_write(dataptr,
+      csl_get_wake_up_counter(entry->tentative->meta->helloack_sfd_timestamp));
+  dataptr += WAKE_UP_COUNTER_LEN;
+  akes_nbr_copy_challenge(dataptr, nbr->meta->q);
+#endif /* CSL_ENABLED */
+  return 1;
 }
 /*---------------------------------------------------------------------------*/
 int
@@ -483,6 +603,9 @@ on_helloack(uint8_t *payload, int p_flag)
 
       if(ctimer_expired(&entry->tentative->meta->wait_timer)) {
         PRINTF("akes: Awaiting ACK\n");
+#if CSL_ENABLED
+        leaky_bucket_effuse(&csl_helloack_inc_bucket);
+#endif /* CSL_ENABLED */
         return CMD_BROKER_ERROR;
       } else {
         PRINTF("akes: Skipping HELLOACK\n");
@@ -491,6 +614,9 @@ on_helloack(uint8_t *payload, int p_flag)
       }
     }
   }
+#if CSL_ENABLED
+  leaky_bucket_effuse(&csl_helloack_inc_bucket);
+#endif /* CSL_ENABLED */
 
   entry = akes_nbr_new(AKES_NBR_PERMANENT);
   if(!entry) {
@@ -576,6 +702,7 @@ on_ack(uint8_t *payload)
   PRINTF("akes: Received ACK\n");
 
   entry = akes_nbr_get_sender_entry();
+#if !CSL_ENABLED
 #if ANTI_REPLAY_WITH_SUPPRESSION
   packetbuf_set_attr(PACKETBUF_ATTR_NEIGHBOR_INDEX, payload[0]);
   anti_replay_parse_counter(payload + 1);
@@ -585,6 +712,7 @@ on_ack(uint8_t *payload)
     PRINTF("akes: Invalid ACK\n");
     return CMD_BROKER_ERROR;
   }
+#endif /* !CSL_ENABLED */
 
   if(entry->permanent) {
     akes_nbr_delete(entry, AKES_NBR_PERMANENT);
@@ -612,10 +740,13 @@ akes_send_update(struct akes_nbr_entry *entry)
 static enum cmd_broker_result
 on_update(uint8_t cmd_id, uint8_t *payload)
 {
+#if !CSL_ENABLED
   struct akes_nbr_entry *entry;
+#endif /* !CSL_ENABLED */
 
   PRINTF("akes: Received %s\n", (cmd_id == AKES_UPDATE_IDENTIFIER) ? "UPDATE" : "UPDATEACK");
 
+#if !CSL_ENABLED
   entry = akes_nbr_get_sender_entry();
   if(!entry || !entry->permanent) {
     PRINTF("akes: Invalid %s\n", (cmd_id == AKES_UPDATE_IDENTIFIER) ? "UPDATE" : "UPDATEACK");
@@ -629,22 +760,32 @@ on_update(uint8_t cmd_id, uint8_t *payload)
     PRINTF("akes: Invalid %s\n", (cmd_id == AKES_UPDATE_IDENTIFIER) ? "UPDATE" : "UPDATEACK");
     return CMD_BROKER_ERROR;
   }
+#endif /* !CSL_ENABLED */
 
+#if CSL_ENABLED
+  if(csl_framer_received_duplicate()) {
+    PRINTF("akes: Duplicated UPDATE\n");
+    return CMD_BROKER_ERROR;
+  }
+#else /* CSL_ENABLED */
   process_update_command(entry->permanent, payload, cmd_id);
 
   if(cmd_id == AKES_UPDATE_IDENTIFIER) {
     send_updateack(entry);
   }
+#endif /* CSL_ENABLED */
 
   return CMD_BROKER_CONSUMED;
 }
 /*---------------------------------------------------------------------------*/
+#if !CSL_ENABLED
 static void
 send_updateack(struct akes_nbr_entry *entry)
 {
   prepare_update_command(AKES_UPDATEACK_IDENTIFIER, entry, AKES_NBR_PERMANENT);
   adaptivesec_send_command_frame();
 }
+#endif /* !CSL_ENABLED */
 /*---------------------------------------------------------------------------*/
 static enum cmd_broker_result
 on_command(uint8_t cmd_id, uint8_t *payload)
@@ -670,7 +811,9 @@ on_command(uint8_t cmd_id, uint8_t *payload)
   case AKES_ACK_IDENTIFIER:
     return on_ack(payload);
   case AKES_UPDATE_IDENTIFIER:
+#if !CSL_ENABLED
   case AKES_UPDATEACK_IDENTIFIER:
+#endif /* !CSL_ENABLED */
     return on_update(cmd_id, payload);
   default:
     return CMD_BROKER_UNCONSUMED;

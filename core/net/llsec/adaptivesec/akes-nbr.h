@@ -46,6 +46,7 @@
 #include "lib/aes-128.h"
 #include "sys/clock.h"
 #include "sys/ctimer.h"
+#include "net/mac/csl/csl.h"
 
 #ifdef AKES_NBR_CONF_MAX_TENTATIVES
 #define AKES_NBR_MAX_TENTATIVES AKES_NBR_CONF_MAX_TENTATIVES
@@ -91,6 +92,7 @@ volatile int akes_nbr_locked;
 
 #define AKES_NBR_CHALLENGE_LEN 8
 #define AKES_NBR_CACHED_HELLOACK_CHALLENGE_LEN 2
+#define AKES_NBR_UNINITIALIZED_DRIFT INT32_MIN
 
 enum akes_nbr_status {
   AKES_NBR_PERMANENT = 0,
@@ -112,11 +114,20 @@ struct akes_nbr_tentative {
 #if !AKES_NBR_WITH_PAIRWISE_KEYS
   uint8_t has_wait_timer;
 #endif /* !AKES_NBR_WITH_PAIRWISE_KEYS */
+#if CSL_ENABLED
+  uint8_t q[AKES_NBR_CHALLENGE_LEN];
+  rtimer_clock_t helloack_sfd_timestamp;
+  wake_up_counter_t predicted_wake_up_counter;
+#endif /* CSL_ENABLED */
 };
 
 struct akes_nbr {
+#if CSL_ENABLED
+  struct csl_sync_data sync_data;
+#else /* CSL_ENABLED */
   struct anti_replay_info anti_replay_info;
   unsigned long expiration_time;
+#endif /* CSL_ENABLED */
 
   union {
     /* permanent */
@@ -127,16 +138,29 @@ struct akes_nbr {
 #if AKES_NBR_WITH_GROUP_KEYS
       uint8_t group_key[AES_128_KEY_LENGTH];
 #endif /* AKES_NBR_WITH_GROUP_KEYS */
+#if CSL_ENABLED
+      uint8_t sent_authentic_hello:1;
+      uint8_t is_receiving_update:1;
+#else /* CSL_ENABLED */
       uint8_t sent_authentic_hello;
+#endif /* CSL_ENABLED */
 #if !AKES_NBR_WITH_PAIRWISE_KEYS
       uint8_t helloack_challenge[AKES_NBR_CACHED_HELLOACK_CHALLENGE_LEN];
 #endif /* !AKES_NBR_WITH_PAIRWISE_KEYS */
+#if CSL_ENABLED
+      uint8_t my_unicast_seqno;
+      uint8_t his_unicast_seqno;
+#endif /* CSL_ENABLED */
 #if ANTI_REPLAY_WITH_SUPPRESSION
       uint8_t last_was_broadcast;
 #endif /* ANTI_REPLAY_WITH_SUPPRESSION */
 #if AKES_NBR_WITH_INDICES
       uint8_t foreign_index;
 #endif /* AKES_NBR_WITH_INDICES */
+#if CSL_ENABLED
+      int32_t drift;
+      struct csl_sync_data historical_sync_data;
+#endif /* CSL_ENABLED */
     };
 
     /* tentative */
@@ -157,6 +181,8 @@ struct akes_nbr {
 };
 
 uint8_t akes_nbr_index_of(struct akes_nbr *nbr);
+struct akes_nbr *akes_nbr_get_nbr(uint8_t index);
+struct akes_nbr_entry *akes_nbr_get_entry_of(struct akes_nbr *nbr);
 void akes_nbr_free_tentative_metadata(struct akes_nbr *nbr);
 void akes_nbr_copy_challenge(uint8_t *dest, uint8_t *source);
 void akes_nbr_copy_key(uint8_t *dest, uint8_t *source);
@@ -166,8 +192,10 @@ struct akes_nbr_entry *akes_nbr_next(struct akes_nbr_entry *current);
 int akes_nbr_count(enum akes_nbr_status status);
 int akes_nbr_free_slots(void);
 struct akes_nbr_entry *akes_nbr_new(enum akes_nbr_status status);
+#if !CSL_ENABLED
 void akes_nbr_do_prolong(struct akes_nbr *nbr, uint16_t seconds);
 void akes_nbr_prolong(struct akes_nbr *nbr);
+#endif /* !CSL_ENABLED */
 struct akes_nbr_entry *akes_nbr_get_entry(const linkaddr_t *addr);
 struct akes_nbr_entry *akes_nbr_get_sender_entry(void);
 struct akes_nbr_entry *akes_nbr_get_receiver_entry(void);

@@ -39,6 +39,7 @@
 
 #include "net/llsec/adaptivesec/coresec-strategy.h"
 #include "net/llsec/adaptivesec/akes.h"
+#include "net/mac/csl/csl.h"
 #include "net/mac/framer-802154.h"
 #include "net/mac/contikimac/contikimac-framer.h"
 #include "net/llsec/anti-replay.h"
@@ -72,7 +73,7 @@ struct mic {
   uint8_t u8[ADAPTIVESEC_BROADCAST_MIC_LEN];
 };
 
-#if AKES_NBR_WITH_PAIRWISE_KEYS && AKES_NBR_WITH_INDICES
+#if AKES_NBR_WITH_PAIRWISE_KEYS && AKES_NBR_WITH_INDICES && !CSL_ENABLED
 
 static struct mic mics[MAX_BUFFERED_MICS];
 static uint8_t next_mic_index;
@@ -327,4 +328,4 @@ const struct adaptivesec_strategy coresec_strategy = {
   init
 };
 /*---------------------------------------------------------------------------*/
-#endif /* AKES_NBR_WITH_PAIRWISE_KEYS && AKES_NBR_WITH_INDICES */
+#endif /* AKES_NBR_WITH_PAIRWISE_KEYS && AKES_NBR_WITH_INDICES && !CSL_ENABLED */

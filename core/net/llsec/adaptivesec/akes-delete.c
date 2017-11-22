@@ -40,6 +40,7 @@
 #include "net/llsec/adaptivesec/akes-delete.h"
 #include "net/llsec/adaptivesec/akes.h"
 #include "net/packetbuf.h"
+#include "net/mac/csl/csl.h"
 
 #ifdef AKES_DELETE_CONF_UPDATE_CHECK_INTERVAL
 #define UPDATE_CHECK_INTERVAL AKES_DELETE_CONF_UPDATE_CHECK_INTERVAL
@@ -53,11 +54,13 @@
 #define MAX_RETRANSMISSIONS 2
 #endif /* AKES_DELETE_CONF_MAX_RETRANSMISSIONS */
 
+#if !CSL_ENABLED
 #ifdef AKES_DELETE_CONF_UPDATEACK_WAITING_PERIOD
 #define UPDATEACK_WAITING_PERIOD AKES_DELETE_CONF_UPDATEACK_WAITING_PERIOD
 #else /* AKES_DELETE_CONF_UPDATEACK_WAITING_PERIOD */
 #define UPDATEACK_WAITING_PERIOD (15) /* seconds */
 #endif /* AKES_DELETE_CONF_UPDATEACK_WAITING_PERIOD */
+#endif /* !CSL_ENABLED */
 
 #define DEBUG 0
 #if DEBUG
@@ -74,7 +77,9 @@ PROCESS_THREAD(delete_process, ev, data)
 {
   static struct etimer update_check_timer;
   struct akes_nbr_entry *next;
+#if !CSL_ENABLED
   static linkaddr_t addr;
+#endif /* !CSL_ENABLED */
 
   PROCESS_BEGIN();
 
@@ -87,14 +92,24 @@ PROCESS_THREAD(delete_process, ev, data)
     PRINTF("akes-delete: #permanent = %d\n", akes_nbr_count(AKES_NBR_PERMANENT));
     next = akes_nbr_head();
     while(next) {
-      if(!next->permanent || !akes_nbr_is_expired(next, AKES_NBR_PERMANENT)) {
+      if(!next->permanent
+          || !akes_nbr_is_expired(next, AKES_NBR_PERMANENT)
+#if CSL_ENABLED
+          || next->permanent->is_receiving_update
+#endif /* CSL_ENABLED */
+          ) {
         next = akes_nbr_next(next);
         continue;
       }
+#if !CSL_ENABLED
       linkaddr_copy(&addr, akes_nbr_get_addr(next));
+#endif /* !CSL_ENABLED */
 
       /* send UPDATE */
       akes_send_update(next);
+#if CSL_ENABLED
+      next->permanent->is_receiving_update = 1;
+#else /* CSL_ENABLED */
       PROCESS_YIELD_UNTIL(ev == PROCESS_EVENT_POLL);
       PRINTF("akes-delete: Sent UPDATE\n");
       etimer_set(&update_check_timer, UPDATEACK_WAITING_PERIOD * CLOCK_SECOND);
@@ -106,6 +121,7 @@ PROCESS_THREAD(delete_process, ev, data)
           && akes_nbr_is_expired(next, AKES_NBR_PERMANENT)) {
         akes_nbr_delete(next, AKES_NBR_PERMANENT);
       }
+#endif /* CSL_ENABLED */
       next = akes_nbr_head();
     }
   }
@@ -116,7 +132,24 @@ PROCESS_THREAD(delete_process, ev, data)
 void
 akes_delete_on_update_sent(void *ptr, int status, int transmissions)
 {
+#if CSL_ENABLED
+  struct akes_nbr_entry *entry;
+
+  entry = akes_nbr_get_receiver_entry();
+  if(!entry || !entry->permanent) {
+    PRINTF("akes-delete: Neighbor has gone\n");
+    return;
+  }
+
+  if(akes_nbr_is_expired(entry, AKES_NBR_PERMANENT)) {
+    PRINTF("akes-delete: Deleting neighbor\n");
+    akes_nbr_delete(entry, AKES_NBR_PERMANENT);
+  } else {
+    entry->permanent->is_receiving_update = 0;
+  }
+#else /* CSL_ENABLED */
   process_poll(&delete_process);
+#endif /* CSL_ENABLED */
 }
 /*---------------------------------------------------------------------------*/
 void
