@@ -102,4 +102,15 @@
 
 /* Enable client-side support for COAP observe */
 #define COAP_OBSERVE_CLIENT 1
+
+/* configure RADIO layer */
+#include "cpu/cc2538/dev/cc2538-rf-async-autoconf.h"
+
+/* configure RDC, MAC, and LLSEC layer */
+#include "net/mac/csl/csl-autoconf.h"
+
+/* set a seeder */
+#undef CSPRNG_CONF_SEEDER
+#define CSPRNG_CONF_SEEDER cc2538_mix_seeder
+
 #endif /* __PROJECT_ERBIUM_CONF_H__ */
