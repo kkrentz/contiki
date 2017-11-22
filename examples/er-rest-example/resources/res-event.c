@@ -39,6 +39,7 @@
 #include <string.h>
 #include "rest-engine.h"
 #include "er-coap.h"
+#include "dev/button-sensor.h"
 
 #define DEBUG 0
 #if DEBUG
@@ -68,16 +69,11 @@ EVENT_RESOURCE(res_event,
                NULL,
                res_event_handler);
 
-/*
- * Use local resource state that is accessed by res_get_handler() and altered by res_event_handler() or PUT or POST.
- */
-static int32_t event_counter = 0;
-
 static void
 res_get_handler(void *request, void *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
 {
   REST.set_header_content_type(response, REST.type.TEXT_PLAIN);
-  REST.set_response_payload(response, buffer, snprintf((char *)buffer, preferred_size, "EVENT %lu", event_counter));
+  REST.set_response_payload(response, buffer, snprintf((char *)buffer, preferred_size, "%i", button_sensor.value(BUTTON_SENSOR_VALUE_TYPE_LEVEL) ? 0 : 1));
 
   /* A post_handler that handles subscriptions/observing will be called for periodic resources by the framework. */
 }
@@ -88,9 +84,6 @@ res_get_handler(void *request, void *response, uint8_t *buffer, uint16_t preferr
 static void
 res_event_handler(void)
 {
-  /* Do the update triggered by the event here, e.g., sampling a sensor. */
-  ++event_counter;
-
   /* Usually a condition is defined under with subscribers are notified, e.g., event was above a threshold. */
   if(1) {
     PRINTF("TICK %u for /%s\n", event_counter, res_event.url);

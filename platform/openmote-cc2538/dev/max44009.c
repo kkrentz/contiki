@@ -155,16 +155,7 @@ max44009_reset(void)
 static uint8_t
 max44009_is_present(void)
 {
-  uint8_t status;
-  uint8_t is_present;
-
-  i2c_single_send(MAX44009_ADDRESS, MAX44009_CONFIG_ADDR);
-  status = i2c_single_receive(MAX44009_ADDRESS, &is_present);
-  if(status != I2C_MASTER_ERR_NONE) {
-    return 0;
-  }
-
-  return is_present != MAX44009_NOT_FOUND;
+  return 1;
 }
 /*---------------------------------------------------------------------------*/
 static uint16_t

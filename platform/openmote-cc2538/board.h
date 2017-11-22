@@ -80,6 +80,9 @@
 #define PLATFORM_HAS_LEDS        1
 /** @} */
 /*---------------------------------------------------------------------------*/
+#define PLATFORM_HAS_SHT21
+#define PLATFORM_HAS_MAX44009
+/*---------------------------------------------------------------------------*/
 /** \name USB configuration
  *
  * The USB pullup is driven by PC0
