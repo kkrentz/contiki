@@ -79,4 +79,32 @@ linkaddr_set_node_addr(linkaddr_t *t)
   linkaddr_copy(&linkaddr_node_addr, t);
 }
 /*---------------------------------------------------------------------------*/
+void
+linkaddr_to_eui_64(uint8_t *dest, const linkaddr_t *addr)
+{
+#if LINKADDR_SIZE == 1
+  /* workaround for simple addresses: derive EUI64 as in RFC 6282 */
+  dest[0] = 0x00;
+  dest[1] = 0x00;
+  dest[2] = 0x00;
+  dest[3] = 0xFF;
+  dest[4] = 0xFE;
+  dest[5] = 0x00;
+  dest[6] = 0x00;
+  dest[7] = addr->u8[0];
+#elif LINKADDR_SIZE == 2
+  /* derive EUI64 as per RFC 6282 */
+  dest[0] = 0x00;
+  dest[1] = 0x00;
+  dest[2] = 0x00;
+  dest[3] = 0xFF;
+  dest[4] = 0xFE;
+  dest[5] = 0x00;
+  dest[6] = addr->u8[0];
+  dest[7] = addr->u8[1];
+#elif LINKADDR_SIZE == 8
+  memcpy(dest, addr->u8, 8);
+#endif /* LINKADDR_SIZE == 1 */
+}
+/*---------------------------------------------------------------------------*/
 /** @} */

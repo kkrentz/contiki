@@ -110,6 +110,11 @@ int linkaddr_cmp(const linkaddr_t *addr1, const linkaddr_t *addr2);
 void linkaddr_set_node_addr(linkaddr_t *addr);
 
 /**
+ * \brief      Derives an EUI-64 address from the given address
+ */
+void linkaddr_to_eui_64(uint8_t *dest, const linkaddr_t *addr);
+
+/**
  * \brief      The Rime address of the node
  *
  *             This variable contains the Rime address of the
