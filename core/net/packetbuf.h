@@ -57,6 +57,7 @@
 #include "net/llsec/llsec802154.h"
 #include "net/mac/tsch/tsch-conf.h"
 #include "net/llsec/anti-replay.h"
+#include "sys/energest.h"
 
 /**
  * \brief      The size of the packetbuf, in bytes
@@ -276,6 +277,14 @@ enum {
   PACKETBUF_ATTR_LISTEN_TIME,
   PACKETBUF_ATTR_TRANSMIT_TIME,
 #endif /* PACKETBUF_WITH_LEGACY_ATTRIBUTES */
+#if ENERGEST_CONF_ON
+  PACKETBUF_ATTR_TXTIME,
+  PACKETBUF_ATTR_TXTIME_BYTES_2_3,
+  PACKETBUF_ATTR_RXTIME,
+  PACKETBUF_ATTR_RXTIME_BYTES_2_3,
+  PACKETBUF_ATTR_CPUTIME,
+  PACKETBUF_ATTR_CPUTIME_BYTES_2_3,
+#endif /* ENERGEST_CONF_ON */
   PACKETBUF_ATTR_MAX_MAC_TRANSMISSIONS,
   PACKETBUF_ATTR_MAC_SEQNO,
 #if PACKETBUF_WITH_LEGACY_ATTRIBUTES
@@ -409,6 +418,9 @@ packetbuf_attr_t packetbuf_attr(uint8_t type);
 int               packetbuf_set_addr(uint8_t type, const linkaddr_t *addr);
 const linkaddr_t *packetbuf_addr(uint8_t type);
 #endif /* PACKETBUF_CONF_ATTRS_INLINE */
+
+void packetbuf_set_rtimer_attr(uint8_t type, rtimer_clock_t t);
+rtimer_clock_t packetbuf_get_rtimer_attr(uint8_t type);
 
 /**
  * \brief      Checks whether the current packet is a broadcast.

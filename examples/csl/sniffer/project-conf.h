@@ -30,33 +30,27 @@
  *
  */
 
-#ifndef PROJECT_RECEIVER_CONF_H_
-#define PROJECT_RECEIVER_CONF_H_
+#ifndef PROJECT_SNIFFER_CONF_H_
+#define PROJECT_SNIFFER_CONF_H_
+
+#undef WATCHDOG_CONF_ENABLE
+#define WATCHDOG_CONF_ENABLE 0
 
 /* configure RADIO layer */
 #include "cpu/cc2538/dev/cc2538-rf-async-autoconf.h"
+#undef RADIO_ASYNC_CONF_WITH_CHECKSUM
+#define RADIO_ASYNC_CONF_WITH_CHECKSUM 0
+#undef CC2538_RF_CONF_CHANNEL
+#define CC2538_RF_CONF_CHANNEL 26
 
-/* configure RDC, MAC, and LLSEC layer */
-#include "net/mac/csl/csl-autoconf.h"
-#undef CSL_CONF_MAX_RETRANSMISSIONS
-#define CSL_CONF_MAX_RETRANSMISSIONS 0
-#undef AKES_DELETE_CONF_ENABLED
-#define AKES_DELETE_CONF_ENABLED 0
-#undef CSL_CONF_SCOPE
-#undef CSL_CONF_RANDOMIZE
-#undef CSL_CONF_CHANNELS
-#define CSL_CONF_CHANNELS { 26 }
-#undef CSL_CONF_OUTPUT_POWER
-#define CSL_CONF_OUTPUT_POWER 0
-#undef CSL_CONF_MAX_BURST_INDEX
-#define CSL_CONF_MAX_BURST_INDEX 3
-
-/* configure NETWORK layer */
+/* disable RDC, MAC, LLSEC, and NETWORK layer */
+#undef NETSTACK_CONF_RDC
+#define NETSTACK_CONF_RDC nordc_driver
+#undef NETSTACK_CONF_MAC
+#define NETSTACK_CONF_MAC nullmac_driver
+#undef NETSTACK_CONF_LLSEC
+#define NETSTACK_CONF_LLSEC nullsec_driver
 #undef NETSTACK_CONF_NETWORK
 #define NETSTACK_CONF_NETWORK nullnet_driver
 
-/* set a seeder */
-#undef CSPRNG_CONF_SEEDER
-#define CSPRNG_CONF_SEEDER cc2538_mix_seeder
-
-#endif /* PROJECT_RECEIVER_CONF_H_ */
+#endif /* PROJECT_SNIFFER_CONF_H_ */

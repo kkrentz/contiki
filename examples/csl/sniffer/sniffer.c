@@ -30,33 +30,48 @@
  *
  */
 
-#ifndef PROJECT_RECEIVER_CONF_H_
-#define PROJECT_RECEIVER_CONF_H_
+#include "contiki.h"
+#include "net/netstack.h"
+#include "net/packetbuf.h"
 
-/* configure RADIO layer */
-#include "cpu/cc2538/dev/cc2538-rf-async-autoconf.h"
+#define DEBUG 1
+#if DEBUG
+#include <stdio.h>
+#define PRINTF(...) printf(__VA_ARGS__)
+#else /* DEBUG */
+#define PRINTF(...)
+#endif /* DEBUG */
 
-/* configure RDC, MAC, and LLSEC layer */
-#include "net/mac/csl/csl-autoconf.h"
-#undef CSL_CONF_MAX_RETRANSMISSIONS
-#define CSL_CONF_MAX_RETRANSMISSIONS 0
-#undef AKES_DELETE_CONF_ENABLED
-#define AKES_DELETE_CONF_ENABLED 0
-#undef CSL_CONF_SCOPE
-#undef CSL_CONF_RANDOMIZE
-#undef CSL_CONF_CHANNELS
-#define CSL_CONF_CHANNELS { 26 }
-#undef CSL_CONF_OUTPUT_POWER
-#define CSL_CONF_OUTPUT_POWER 0
-#undef CSL_CONF_MAX_BURST_INDEX
-#define CSL_CONF_MAX_BURST_INDEX 3
+PROCESS(sniffer_process, "sniffer_process");
+AUTOSTART_PROCESSES(&sniffer_process);
 
-/* configure NETWORK layer */
-#undef NETSTACK_CONF_NETWORK
-#define NETSTACK_CONF_NETWORK nullnet_driver
+/*---------------------------------------------------------------------------*/
+static void
+on_rxpktdone(void)
+{
+  uint8_t *dataptr;
+  uint8_t i;
 
-/* set a seeder */
-#undef CSPRNG_CONF_SEEDER
-#define CSPRNG_CONF_SEEDER cc2538_mix_seeder
+  packetbuf_clear();
+  NETSTACK_RADIO_ASYNC.read_phy_header_and_set_datalen();
+  NETSTACK_RADIO_ASYNC.read_payload(NETSTACK_RADIO_ASYNC.remaining_payload_bytes());
 
-#endif /* PROJECT_RECEIVER_CONF_H_ */
+  dataptr = packetbuf_dataptr();
+  for(i = 0; i < packetbuf_datalen(); i++) {
+    PRINTF("%02x", dataptr[i]);
+  }
+  PRINTF("\n");
+  NETSTACK_RADIO_ASYNC.flushrx();
+}
+/*---------------------------------------------------------------------------*/
+PROCESS_THREAD(sniffer_process, ev, data)
+{
+  PROCESS_BEGIN();
+
+  NETSTACK_RADIO_ASYNC.set_value(RADIO_PARAM_SHR_DEM_ZEROES, 3);
+  NETSTACK_RADIO_ASYNC.set_object(RADIO_PARAM_FIFOP_CALLBACK, on_rxpktdone, 127);
+  NETSTACK_RADIO_ASYNC.on();
+
+  PROCESS_END();
+}
+/*---------------------------------------------------------------------------*/

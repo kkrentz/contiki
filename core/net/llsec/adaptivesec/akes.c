@@ -51,6 +51,9 @@
 #include "net/mac/csl/csl.h"
 #include "net/mac/csl/csl-framer.h"
 #include <string.h>
+#ifdef ENERGY_TRACING
+#include <stdio.h>
+#endif /* ENERGY_TRACING */
 
 #ifdef AKES_CONF_MAX_RETRANSMISSIONS_OF_HELLOACKS_AND_ACKS
 #define MAX_RETRANSMISSIONS_OF_HELLOACKS_AND_ACKS AKES_CONF_MAX_RETRANSMISSIONS_OF_HELLOACKS_AND_ACKS
@@ -356,6 +359,14 @@ akes_create_hello(void)
 static void
 on_hello_sent(void *ptr, int status, int transmissions)
 {
+#ifdef ENERGY_TRACING
+  printf("%i;hello;%lu;%lu;%lu;%i\n",
+          linkaddr_node_addr.u16,
+          packetbuf_get_rtimer_attr(PACKETBUF_ATTR_TXTIME),
+          packetbuf_get_rtimer_attr(PACKETBUF_ATTR_RXTIME),
+          packetbuf_get_rtimer_attr(PACKETBUF_ATTR_CPUTIME),
+          transmissions);
+#endif /* ENERGY_TRACING */
   is_awaiting_helloacks = 1;
   ctimer_set(&hello_timer,
       AKES_MAX_WAITING_PERIOD * CLOCK_SECOND,

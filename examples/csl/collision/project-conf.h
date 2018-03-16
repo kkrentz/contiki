@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Hasso-Plattner-Institut.
+ * Copyright (c) 2018, Hasso-Plattner-Institut.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,33 +30,25 @@
  *
  */
 
-#ifndef PROJECT_RECEIVER_CONF_H_
-#define PROJECT_RECEIVER_CONF_H_
+#ifndef PROJECT_COLLISION_CONF_H_
+#define PROJECT_COLLISION_CONF_H_
 
 /* configure RADIO layer */
 #include "cpu/cc2538/dev/cc2538-rf-async-autoconf.h"
 
 /* configure RDC, MAC, and LLSEC layer */
 #include "net/mac/csl/csl-autoconf.h"
-#undef CSL_CONF_MAX_RETRANSMISSIONS
-#define CSL_CONF_MAX_RETRANSMISSIONS 0
-#undef AKES_DELETE_CONF_ENABLED
-#define AKES_DELETE_CONF_ENABLED 0
-#undef CSL_CONF_SCOPE
-#undef CSL_CONF_RANDOMIZE
-#undef CSL_CONF_CHANNELS
-#define CSL_CONF_CHANNELS { 26 }
-#undef CSL_CONF_OUTPUT_POWER
-#define CSL_CONF_OUTPUT_POWER 0
-#undef CSL_CONF_MAX_BURST_INDEX
-#define CSL_CONF_MAX_BURST_INDEX 3
 
 /* configure NETWORK layer */
 #undef NETSTACK_CONF_NETWORK
 #define NETSTACK_CONF_NETWORK nullnet_driver
 
+#define COLLISION_TRACING
+#undef ENERGEST_CONF_ON
+#define ENERGEST_CONF_ON 1
+
 /* set a seeder */
 #undef CSPRNG_CONF_SEEDER
 #define CSPRNG_CONF_SEEDER cc2538_mix_seeder
 
-#endif /* PROJECT_RECEIVER_CONF_H_ */
+#endif /* PROJECT_COLLISION_CONF_H_ */

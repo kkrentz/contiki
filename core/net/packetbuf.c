@@ -239,5 +239,19 @@ packetbuf_holds_broadcast(void)
   return linkaddr_cmp(&packetbuf->addrs[PACKETBUF_ADDR_RECEIVER - PACKETBUF_ADDR_FIRST].addr, &linkaddr_null);
 }
 /*---------------------------------------------------------------------------*/
+void
+packetbuf_set_rtimer_attr(uint8_t type, rtimer_clock_t t)
+{
+  packetbuf_set_attr(type, t & 0xFFFF);
+  packetbuf_set_attr(type + 1, (t >> 16) & 0xFFFF);
+}
+/*---------------------------------------------------------------------------*/
+rtimer_clock_t
+packetbuf_get_rtimer_attr(uint8_t type)
+{
+  return packetbuf_attr(type) | (packetbuf_attr(type + 1) << 16);
+}
+/*---------------------------------------------------------------------------*/
+
 
 /** @} */

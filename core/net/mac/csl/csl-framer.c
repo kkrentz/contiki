@@ -250,6 +250,10 @@ parse(void)
   if(is_command) {
     packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME802154_CMDFRAME);
   } else {
+#ifdef COLLISION_TRACING
+    PRINTF("csl-framer: rejecting any data frames\n");
+    return FRAMER_FAILED;
+#endif /* COLLISION_TRACING */
     packetbuf_set_attr(PACKETBUF_ATTR_FRAME_TYPE, FRAME802154_DATAFRAME);
   }
   len = csl_framer_get_payload_frame_header_len(subtype, frame_pending);

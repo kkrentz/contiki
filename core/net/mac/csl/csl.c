@@ -46,6 +46,7 @@
 #include "net/netstack.h"
 #include "net/packetbuf.h"
 #include "net/queuebuf.h"
+#include "sys/energest.h"
 #include "lib/memb.h"
 #include "lib/list.h"
 #include "net/llsec/adaptivesec/adaptivesec.h"
@@ -55,6 +56,9 @@
 #ifdef LPM_CONF_ENABLE
 #include "lpm.h"
 #endif /* LPM_CONF_ENABLE */
+#ifdef CSL_CONF_SCOPE
+#include "dev/gpio.h"
+#endif /* CSL_CONF_SCOPE */
 
 #ifdef CSL_CONF_MAX_RETRANSMISSIONS
 #define MAX_RETRANSMISSIONS CSL_CONF_MAX_RETRANSMISSIONS
@@ -77,7 +81,11 @@
 #ifdef CSL_CONF_CCA_THRESHOLD
 #define CCA_THRESHOLD CSL_CONF_CCA_THRESHOLD
 #else /* CSL_CONF_CCA_THRESHOLD */
+#ifdef CSL_CONF_NO_CCA
+#define CCA_THRESHOLD (0)
+#else /* CSL_CONF_NO_CCA */
 #define CCA_THRESHOLD (-81)
+#endif /* CSL_CONF_NO_CCA */
 #endif /* CSL_CONF_CCA_THRESHOLD */
 
 #ifdef CSL_CONF_MAX_BURST_INDEX
@@ -181,6 +189,11 @@ struct buffered_frame {
   int transmissions;
   rtimer_clock_t next_attempt;
   void *ptr;
+#if ENERGEST_CONF_ON
+  rtimer_clock_t txtime;
+  rtimer_clock_t rxtime;
+  rtimer_clock_t cputime;
+#endif /* ENERGEST_CONF_ON */
 };
 
 struct late_rendezvous {
@@ -391,7 +404,13 @@ init(void)
   process_start(&post_processing, NULL);
   PT_INIT(&pt);
   duty_cycle_next = RTIMER_NOW() + WAKE_UP_COUNTER_INTERVAL;
+#ifdef CSL_CONF_SCOPE
+  /* AD3/DIO3 */
+  GPIO_SET_OUTPUT(GPIO_D_BASE, 1);
+  schedule_duty_cycle(duty_cycle_next - LPM_SWITCHING - LPM_SWITCHING - 33);
+#else /* CSL_CONF_SCOPE */
   schedule_duty_cycle(duty_cycle_next - LPM_DEEP_SWITCHING);
+#endif /* CSL_CONF_SCOPE */
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -452,6 +471,20 @@ duty_cycle(void)
     /* skipping duty cycle */
   } else {
     if(!u.duty_cycle.skip_to_rendezvous) {
+
+#ifdef CSL_CONF_SCOPE
+      {
+        rtimer_clock_t now;
+        while(!rtimer_has_timed_out(duty_cycle_next - 33 - LPM_SWITCHING));
+        GPIO_SET_PIN(GPIO_D_BASE, 1);
+        now = RTIMER_NOW();
+        while(!rtimer_has_timed_out(now + 10));
+        GPIO_CLR_PIN(GPIO_D_BASE, 1);
+        schedule_duty_cycle(duty_cycle_next - LPM_SWITCHING);
+        PT_YIELD(&pt);
+      }
+#endif /* CSL_CONF_SCOPE */
+
       last_wake_up_time = get_last_wake_up_time();
       csl_wake_up_counter = csl_get_wake_up_counter(last_wake_up_time);
       wake_up_counter_last_increment = last_wake_up_time;
@@ -816,12 +849,14 @@ parse_wake_up_frame(void)
     break;
   default:
     /* check upper bound maintained by SPLO-CSL */
+#ifndef CSL_CONF_RANDOMIZE
     if(u.duty_cycle.remaining_wake_up_frames >= WAKE_UP_SEQUENCE_LENGTH(
         CSL_MAX_OVERALL_UNCERTAINTY,
         (datalen + RADIO_ASYNC_PHY_HEADER_LEN))) {
       PRINTF("csl: rendezvous time is too late\n");
       return 0;
     }
+#endif /* CSL_CONF_RANDOMIZE */
     break;
   }
 
@@ -992,7 +1027,7 @@ on_txdone(void)
     }
     duty_cycle();
   } else if(is_transmitting && u.transmit.is_waiting_for_txdone) {
-    transmit();
+    transmit_wrapper(NULL, NULL);
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -1033,6 +1068,12 @@ PROCESS_THREAD(post_processing, ev, data)
     /* send queued frames */
     sent_once = 0;
     while((next = select_next_frame_to_transmit())) {
+#if ENERGEST_CONF_ON
+      energest_flush();
+      energest_type_set(ENERGEST_TYPE_TRANSMIT, 0);
+      energest_type_set(ENERGEST_TYPE_LISTEN, 0);
+      energest_type_set(ENERGEST_TYPE_CPU, 0);
+#endif /* ENERGEST_CONF_ON */
       memset(&u.transmit, 0, sizeof(u.transmit));
       u.transmit.bf[0] = next;
       queuebuf_to_packetbuf(u.transmit.bf[0]->qb);
@@ -1090,6 +1131,9 @@ PROCESS_THREAD(post_processing, ev, data)
             * RTIMER_ARCH_SECOND) / (1000000)) + 1;
         negative_uncertainty += CSL_NEGATIVE_SYNC_GUARD_TIME;
         positive_uncertainty += CSL_POSITIVE_SYNC_GUARD_TIME;
+#ifdef CSL_CONF_RANDOMIZE
+        positive_uncertainty += random_rand() & 0x3F;
+#endif /* CSL_CONF_RANDOMIZE */
         /* compensate for clock drift if known */
         if(drift == AKES_NBR_UNINITIALIZED_DRIFT) {
           compensation = 0;
@@ -1199,6 +1243,12 @@ PROCESS_THREAD(post_processing, ev, data)
         memcpy(u.transmit.payload_frame[i] + 1,
             packetbuf_hdrptr(),
             packetbuf_totlen());
+#ifdef ENERGY_TRACING
+        if(u.transmit.subtype == CSL_FRAMER_SUBTYPE_HELLO) {
+          u.transmit.payload_frame[i][0] = RADIO_ASYNC_MAX_FRAME_LEN;
+          memset(u.transmit.payload_frame[i] + 1 + packetbuf_totlen(), 0, RADIO_ASYNC_MAX_FRAME_LEN - packetbuf_totlen());
+        }
+#endif /* ENERGY_TRACING */
       } while(i--);
       if(create_result == FRAMER_FAILED) {
         PRINTF("csl: NETSTACK_FRAMER.create failed\n");
@@ -1234,7 +1284,9 @@ PROCESS_THREAD(post_processing, ev, data)
       }
       schedule_transmission(u.transmit.wake_up_sequence_start
           - WAKE_UP_SEQUENCE_GUARD_TIME);
-
+#if ENERGEST_CONF_ON
+      u.transmit.bf[0]->cputime += energest_type_time(ENERGEST_TYPE_CPU);
+#endif /* ENERGEST_CONF_ON */
       PROCESS_YIELD_UNTIL(ev == PROCESS_EVENT_POLL);
       on_transmitted();
       PROCESS_PAUSE();
@@ -1247,14 +1299,22 @@ PROCESS_THREAD(post_processing, ev, data)
 #endif /* LPM_CONF_ENABLE */
     memset(&u.duty_cycle, 0, sizeof(u.duty_cycle));
     duty_cycle_next = shift_to_future(duty_cycle_next);
+#ifdef CSL_CONF_SCOPE
+    while(!rtimer_is_schedulable(duty_cycle_next - LPM_SWITCHING - 33 - LPM_SWITCHING, RTIMER_GUARD_TIME + 1)) {
+#else /* CSL_CONF_SCOPE */
     while(!rtimer_is_schedulable(duty_cycle_next - LPM_DEEP_SWITCHING, RTIMER_GUARD_TIME + 1)) {
+#endif /* CSL_CONF_SCOPE */
       duty_cycle_next += WAKE_UP_COUNTER_INTERVAL;
     }
     lr = get_nearest_late_rendezvous();
     if(!lr
         || (rtimer_smaller_or_equal(
             duty_cycle_next + LATE_WAKE_UP_GUARD_TIME, lr->time))) {
+#ifdef CSL_CONF_SCOPE
+      schedule_duty_cycle(duty_cycle_next - LPM_SWITCHING - 33 - LPM_SWITCHING);
+#else /* CSL_CONF_SCOPE */
       schedule_duty_cycle(duty_cycle_next - LPM_DEEP_SWITCHING);
+#endif /* CSL_CONF_SCOPE */
     } else {
       u.duty_cycle.rendezvous_time = lr->time;
       u.duty_cycle.got_rendezvous_time = 1;
@@ -1374,6 +1434,12 @@ create_wake_up_frame(uint8_t *dst)
           &payload_frames_length, 1,
           dst, CSL_FRAMER_OTP_LEN, 1);
     AES_128_RELEASE_LOCK();
+#ifdef CSL_CONF_CORRUPT_OTP
+    if(u.transmit.subtype == CSL_FRAMER_SUBTYPE_NORMAL) {
+      dst[0] += 7;
+      dst[1] += 7;
+    }
+#endif /* CSL_CONF_CORRUPT_OTP */
     dst += CSL_FRAMER_OTP_LEN;
   }
 
@@ -1442,7 +1508,14 @@ schedule_transmission(rtimer_clock_t time)
 static void
 transmit_wrapper(struct rtimer *rt, void *ptr)
 {
+#if ENERGEST_CONF_ON
+  rtimer_clock_t start;
+  start = RTIMER_NOW();
+#endif /* ENERGEST_CONF_ON */
   transmit();
+#if ENERGEST_CONF_ON
+  u.transmit.bf[0]->cputime += rtimer_delta(start, RTIMER_NOW());
+#endif /* ENERGEST_CONF_ON */
 }
 /*---------------------------------------------------------------------------*/
 static char
@@ -1619,6 +1692,11 @@ on_transmitted(void)
   rtimer_clock_t expected_diff;
   rtimer_clock_t actual_diff;
 
+#if ENERGEST_CONF_ON
+  u.transmit.bf[0]->txtime += energest_type_time(ENERGEST_TYPE_TRANSMIT);
+  u.transmit.bf[0]->rxtime += energest_type_time(ENERGEST_TYPE_LISTEN);
+#endif /* ENERGEST_CONF_ON */
+
   i = 0;
   do {
     switch(u.transmit.result[i]) {
@@ -1679,6 +1757,12 @@ on_transmitted(void)
           break;
         }
       }
+
+#if ENERGEST_CONF_ON
+      packetbuf_set_rtimer_attr(PACKETBUF_ATTR_TXTIME, u.transmit.bf[0]->txtime);
+      packetbuf_set_rtimer_attr(PACKETBUF_ATTR_RXTIME, u.transmit.bf[0]->rxtime);
+      packetbuf_set_rtimer_attr(PACKETBUF_ATTR_CPUTIME, u.transmit.bf[0]->cputime);
+#endif /* ENERGEST_CONF_ON */
 
       mac_call_sent_callback(u.transmit.bf[i]->sent,
           u.transmit.bf[i]->ptr,
@@ -1746,6 +1830,11 @@ queue_frame(mac_callback_t sent, void *ptr)
   bf->sent = sent;
   bf->transmissions = 0;
   bf->next_attempt = RTIMER_NOW();
+#if ENERGEST_CONF_ON
+  bf->txtime = 0;
+  bf->rxtime = 0;
+  bf->cputime = 0;
+#endif /* ENERGEST_CONF_ON */
   /* do not send earlier than other frames for that receiver */
   next = list_head(buffered_frames_list);
   while(next) {

@@ -42,6 +42,7 @@
 #include "net/packetbuf.h"
 #include "net/queuebuf.h"
 #include "lib/memb.h"
+#include "sys/energest.h"
 
 #define DEBUG 0
 #if DEBUG
@@ -62,6 +63,11 @@ struct ongoing_broadcast {
   void *ptr;
   mac_callback_t sent;
   int transmissions;
+#if ENERGEST_CONF_ON
+  rtimer_clock_t txtime;
+  rtimer_clock_t rxtime;
+  rtimer_clock_t cputime;
+#endif /* ENERGEST_CONF_ON */
 };
 
 static void send_broadcast(struct ongoing_broadcast *ob);
@@ -93,6 +99,11 @@ send(mac_callback_t sent, void *ptr)
     ob->sent = sent;
     ob->ptr = ptr;
     ob->transmissions = 0;
+#if ENERGEST_CONF_ON
+    ob->txtime = 0;
+    ob->rxtime = 0;
+    ob->cputime = 0;
+#endif /* ENERGEST_CONF_ON */
     send_broadcast(ob);
   } else {
     NETSTACK_MAC.send(sent, ptr);
@@ -115,6 +126,11 @@ send_broadcast(struct ongoing_broadcast *ob)
   }
 
   if(!entry) {
+#if ENERGEST_CONF_ON
+    packetbuf_set_rtimer_attr(PACKETBUF_ATTR_TXTIME, ob->txtime);
+    packetbuf_set_rtimer_attr(PACKETBUF_ATTR_RXTIME, ob->rxtime);
+    packetbuf_set_rtimer_attr(PACKETBUF_ATTR_CPUTIME, ob->cputime);
+#endif /* ENERGEST_CONF_ON */
     memb_free(&ongoing_broadcasts_memb, ob);
     mac_call_sent_callback(ob->sent, ob->ptr, MAC_TX_OK, ob->transmissions);
     return;
@@ -142,6 +158,11 @@ on_broadcast_sent(void *ptr, int status, int transmissions)
   case MAC_TX_ERR_FATAL:
     ob = (struct ongoing_broadcast *)ptr;
     ob->transmissions += transmissions;
+#if ENERGEST_CONF_ON
+    ob->txtime += packetbuf_get_rtimer_attr(PACKETBUF_ATTR_TXTIME);
+    ob->rxtime += packetbuf_get_rtimer_attr(PACKETBUF_ATTR_RXTIME);
+    ob->cputime += packetbuf_get_rtimer_attr(PACKETBUF_ATTR_CPUTIME);
+#endif /* ENERGEST_CONF_ON */
     send_broadcast(ob);
     return;
   }
