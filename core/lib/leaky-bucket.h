@@ -64,6 +64,11 @@ void leaky_bucket_init(struct leaky_bucket *lb,
 void leaky_bucket_pour(struct leaky_bucket *lb);
 
 /**
+ * \brief removes a drop from the bucket
+ */
+void leaky_bucket_effuse(struct leaky_bucket *lb);
+
+/**
  * \return whether the bucket is full
  */
 int leaky_bucket_is_full(struct leaky_bucket *lb);

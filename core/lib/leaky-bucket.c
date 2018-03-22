@@ -76,6 +76,15 @@ leaky_bucket_pour(struct leaky_bucket *lb)
   lb->filling_level = MIN(lb->filling_level + 1, lb->capacity);
 }
 /*---------------------------------------------------------------------------*/
+void
+leaky_bucket_effuse(struct leaky_bucket *lb)
+{
+  update_filling_level(lb);
+  if(lb->filling_level) {
+    lb->filling_level--;
+  }
+}
+/*---------------------------------------------------------------------------*/
 int
 leaky_bucket_is_full(struct leaky_bucket *lb)
 {
