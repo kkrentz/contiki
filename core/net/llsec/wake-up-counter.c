@@ -103,3 +103,19 @@ wake_up_counter_increments(rtimer_clock_t delta, uint32_t *mod)
   return delta >> BITS_TO_REPRESENT((WAKE_UP_COUNTER_INTERVAL - 1));
 }
 /*---------------------------------------------------------------------------*/
+uint32_t
+wake_up_counter_round_increments(rtimer_clock_t delta)
+{
+  uint32_t mod;
+  uint32_t increments;
+
+  increments = wake_up_counter_increments(delta, &mod);
+
+  if(mod >= (WAKE_UP_COUNTER_INTERVAL / 2)) {
+    /* round up */
+    return increments + 1;
+  } else {
+    return increments;
+  }
+}
+/*---------------------------------------------------------------------------*/
