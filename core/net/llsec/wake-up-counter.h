@@ -55,5 +55,6 @@ typedef union {
 wake_up_counter_t wake_up_counter_parse(uint8_t *src);
 void wake_up_counter_write(uint8_t *dst, wake_up_counter_t wuc);
 uint32_t wake_up_counter_increments(rtimer_clock_t delta, uint32_t *mod);
+uint32_t wake_up_counter_round_increments(rtimer_clock_t delta);
 
 #endif /* WAKE_UP_COUNTER_H_ */
